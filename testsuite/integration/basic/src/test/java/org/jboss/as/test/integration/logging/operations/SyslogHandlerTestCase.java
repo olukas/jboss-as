@@ -20,14 +20,15 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
 
-
 package org.jboss.as.test.integration.logging.operations;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REMOVE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -39,14 +40,11 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import static org.junit.Assert.*;
-
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.as.arquillian.api.ServerSetup;
 import org.jboss.as.arquillian.api.ServerSetupTask;
 import org.jboss.as.arquillian.container.ManagementClient;
-import org.jboss.as.controller.client.OperationBuilder;
 import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logging.Logger;
@@ -54,7 +52,6 @@ import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.productivity.java.syslog4j.server.SyslogServer;
@@ -64,12 +61,12 @@ import org.productivity.java.syslog4j.server.impl.event.printstream.FileSyslogSe
 
 /**
  * A SyslogHandlerTestCase for testing that logs are logged to syslog
- *
+ * 
  * @author Ondrej Lukas
  */
 @RunWith(Arquillian.class)
 @ServerSetup(SyslogHandlerTestCase.SyslogHandlerTestCaseSetup.class)
-@Ignore("WFLY-1584 - Events may not be getting fired before the file read is done.")
+// @Ignore("WFLY-1584 - Events may not be getting fired before the file read is done.")
 public class SyslogHandlerTestCase {
 
     private static final Logger LOGGER = Logger.getLogger(SyslogHandlerTestCase.class.getPackage().getName());
@@ -176,7 +173,7 @@ public class SyslogHandlerTestCase {
     @Deployment
     public static WebArchive deployment() {
         final WebArchive war = ShrinkWrap.create(WebArchive.class, "test.war");
-        //war.addPackage(SyslogHandlerTestCase.class.getPackage());
+        // war.addPackage(SyslogHandlerTestCase.class.getPackage());
         war.addClass(TimeoutUtil.class);
         return war;
     }
@@ -270,9 +267,9 @@ public class SyslogHandlerTestCase {
             managementClient.getControllerClient().execute(op);
 
             // delete log file
-            if (logFile.exists()) {
-                logFile.delete();
-            }
+            // if (logFile.exists()) {
+            // logFile.delete();
+            // }
         }
 
     }

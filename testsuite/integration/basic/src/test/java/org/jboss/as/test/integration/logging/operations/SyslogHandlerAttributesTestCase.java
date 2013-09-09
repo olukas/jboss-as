@@ -3,10 +3,11 @@ package org.jboss.as.test.integration.logging.operations;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUTCOME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_ATTRIBUTE_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REMOVE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUCCESS;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -18,9 +19,13 @@ import org.jboss.arquillian.test.api.ArquillianResource;
 import org.jboss.as.arquillian.api.ServerSetup;
 import org.jboss.as.arquillian.api.ServerSetupTask;
 import org.jboss.as.arquillian.container.ManagementClient;
+import org.jboss.as.controller.PathAddress;
+import org.jboss.as.controller.PathElement;
+import org.jboss.as.controller.operations.common.Util;
 import org.jboss.dmr.ModelNode;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -47,6 +52,8 @@ public class SyslogHandlerAttributesTestCase {
     private static final String SERVER_ADDRESS = "server-address";
     private static final String HOSTNAME = "hostname";
     private static final String SYSLOG_FORMAT = "syslog-format";
+    private static final PathAddress syslogHandlerAddress = PathAddress.pathAddress(
+            PathElement.pathElement(SUBSYSTEM, "logging"), PathElement.pathElement("syslog-handler", SYSLOG_HANDLER_NAME));
 
     @Test
     public void testSettingSyslogAttributes() throws Exception {
@@ -83,70 +90,20 @@ public class SyslogHandlerAttributesTestCase {
 
     // write new attributes via write-attribute operation
     private void writeNewAttributes() throws IOException {
-        ModelNode op;
-        op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("syslog-handler", SYSLOG_HANDLER_NAME);
-        op.get("name").set("port");
-        op.get("value").set(9678);
-        managementClient.getControllerClient().execute(op);
+        writeSyslogHandlerAttributeOperation("port", new ModelNode(9678));
+        writeSyslogHandlerAttributeOperation("app-name", new ModelNode("new_name"));
+        writeSyslogHandlerAttributeOperation("enabled", new ModelNode("true"));
+        writeSyslogHandlerAttributeOperation("level", new ModelNode("INFO"));
+        writeSyslogHandlerAttributeOperation("facility", new ModelNode("user-level"));
+        writeSyslogHandlerAttributeOperation("server-address", new ModelNode("127.0.0.2"));
+        writeSyslogHandlerAttributeOperation("hostname", new ModelNode("new_hostname"));
+        writeSyslogHandlerAttributeOperation("syslog-format", new ModelNode("RFC3164"));
+    }
 
-        op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("syslog-handler", SYSLOG_HANDLER_NAME);
-        op.get("name").set("app-name");
-        op.get("value").set("new_name");
-        managementClient.getControllerClient().execute(op);
-
-        op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("syslog-handler", SYSLOG_HANDLER_NAME);
-        op.get("name").set("enabled");
-        op.get("value").set("true");
-        managementClient.getControllerClient().execute(op);
-
-        op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("syslog-handler", SYSLOG_HANDLER_NAME);
-        op.get("name").set("level");
-        op.get("value").set("INFO");
-        managementClient.getControllerClient().execute(op);
-
-        op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("syslog-handler", SYSLOG_HANDLER_NAME);
-        op.get("name").set("facility");
-        op.get("value").set("user-level");
-        managementClient.getControllerClient().execute(op);
-
-        op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("syslog-handler", SYSLOG_HANDLER_NAME);
-        op.get("name").set("server-address");
-        op.get("value").set("127.0.0.2");
-        managementClient.getControllerClient().execute(op);
-
-        op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("syslog-handler", SYSLOG_HANDLER_NAME);
-        op.get("name").set("hostname");
-        op.get("value").set("new_hostname");
-        managementClient.getControllerClient().execute(op);
-
-        op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("syslog-handler", SYSLOG_HANDLER_NAME);
-        op.get("name").set("syslog-format");
-        op.get("value").set("RFC3164");
-        managementClient.getControllerClient().execute(op);
+    private void writeSyslogHandlerAttributeOperation(String name, ModelNode value) throws IOException {
+        ModelNode op = Util.getWriteAttributeOperation(syslogHandlerAddress, name, value);
+        ModelNode result = managementClient.getControllerClient().execute(op);
+        Assert.assertEquals(result.get("failure-description").asString(), SUCCESS, result.get(OUTCOME).asString());
     }
 
     @Deployment

@@ -240,6 +240,8 @@ public class AuditLogToSyslogTestCase {
         public void tearDown(ManagementClient managementClient, String containerId) throws Exception {
             // stop syslog server
             SyslogServer.shutdown();
+            server.setThread(null);
+            server.getConfig().removeAllEventHandlers();
 
             ModelNode op;
 

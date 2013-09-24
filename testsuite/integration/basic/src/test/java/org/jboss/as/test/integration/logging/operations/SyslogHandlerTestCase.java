@@ -21,19 +21,26 @@
  */
 package org.jboss.as.test.integration.logging.operations;
 
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.COMPOSITE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ENABLED;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REMOVE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STEPS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.productivity.java.syslog4j.SyslogConstants.UDP;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.text.MessageFormat;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -48,13 +55,16 @@ import org.jboss.as.arquillian.api.ContainerResource;
 import org.jboss.as.arquillian.api.ServerSetup;
 import org.jboss.as.arquillian.api.ServerSetupTask;
 import org.jboss.as.arquillian.container.ManagementClient;
-import org.jboss.as.controller.client.ModelControllerClient;
+import org.jboss.as.controller.PathAddress;
+import org.jboss.as.controller.operations.common.Util;
+import org.jboss.as.test.integration.logging.syslogserver.UDPSyslogServerConfig;
 import org.jboss.as.test.integration.logging.util.AbstractLoggingTest;
 import org.jboss.as.test.integration.logging.util.LoggingServlet;
 import org.jboss.as.test.integration.security.common.Utils;
 import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logging.Logger;
+import org.jboss.logging.Logger.Level;
 import org.jboss.osgi.metadata.ManifestBuilder;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.Asset;
@@ -67,7 +77,6 @@ import org.productivity.java.syslog4j.server.SyslogServer;
 import org.productivity.java.syslog4j.server.SyslogServerEventHandlerIF;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
-import org.productivity.java.syslog4j.util.SyslogUtility;
 
 /**
  * A SyslogHandlerTestCase for testing that logs are logged to syslog
@@ -81,97 +90,145 @@ public class SyslogHandlerTestCase extends AbstractLoggingTest {
 
     private static Logger LOGGER = Logger.getLogger(SyslogHandlerTestCase.class);
 
+    /** prefix used for logged messages */
+    private static final String LOG_PREFIX = "Syslog";
+    /** Logging servlet URL with query parameter configured */
+    private static final String LOGGER_QUERY = LoggingServlet.SERVLET_URL.substring(1) + "?" + LoggingServlet.PARAM_PREFIX
+            + "=" + LOG_PREFIX;
+
+    private static final PathAddress SYSLOG_PROFILE_ADDR = PathAddress.pathAddress().append(SUBSYSTEM, "logging")
+            .append("logging-profile", "syslog-profile");
+    private static final PathAddress SYSLOG_HANDLER_ADDR = SYSLOG_PROFILE_ADDR.append("syslog-handler", "SYSLOG");
+
     @ContainerResource
     private ManagementClient managementClient;
 
-    private static final String TRACE_LOG = "trace";
-    private static final String DEBUG_LOG = "debug";
-    private static final String INFO_LOG = "info";
-    private static final String WARN_LOG = "warn";
-    private static final String ERROR_LOG = "error";
-    private static final String FATAL_LOG = "fatal";
-    private static final String EXPECTED_TRACE = "DEBUG";
-    private static final String EXPECTED_DEBUG = "DEBUG";
-    private static final String EXPECTED_INFO = "INFO";
-    private static final String EXPECTED_WARN = "WARN";
-    private static final String EXPECTED_ERROR = "ERROR";
-    private static final String EXPECTED_FATAL = "EMERGENCY";
+    /** Syslog server port. */
     private static final int PORT = 10514;
 
-    private static BlockingQueue<String> queue;
     private static final int ADJUSTED_SECOND = TimeoutUtil.adjust(1000);
 
-    /*
-     * test that messages on all levels are logged
+    /**
+     * Tests that messages on all levels are logged, when level="TRACE" in syslog handler.
      */
     @Test
-    public void testAllLevelLogs(@ArquillianResource(LoggingServlet.class) URL deployementUrl) throws Exception {
+    public void testAllLevelLogs(@ArquillianResource URL deployementUrl) throws Exception {
+        final BlockingQueue<SyslogServerEventIF> queue = BlockedSyslogServerEventHandler.getQueue();
         setSyslogAttribute("level", "TRACE");
-        queue.poll();
-        makeLogs(deployementUrl, "Logger?text=Syslog");
-        testLog(DEBUG_LOG, EXPECTED_DEBUG, "DEBUG");
-        testLog(TRACE_LOG, EXPECTED_TRACE, "TRACE");
-        testLog(INFO_LOG, EXPECTED_INFO, "INFO");
-        testLog(WARN_LOG, EXPECTED_WARN, "WARN");
-        testLog(ERROR_LOG, EXPECTED_ERROR, "ERROR");
-        testLog(FATAL_LOG, EXPECTED_FATAL, "FATAL");
-        String checkFinish = queue.poll(5 * ADJUSTED_SECOND, TimeUnit.MILLISECONDS);
-        Assert.assertNull("this message was logged but wasn't be: " + checkFinish, checkFinish);
+        queue.clear();
+        makeLogs(deployementUrl);
+        for (Level level : LoggingServlet.LOG_LEVELS) {
+            testLog(level);
+        }
+        final SyslogServerEventIF expectNoOtherMsg = queue.poll(3 * ADJUSTED_SECOND, TimeUnit.MILLISECONDS);
+        Assert.assertNull("No other message was expected in syslog.", expectNoOtherMsg);
     }
 
-    /*
-     * test that only messages on specific level or higher level are logged
+    /**
+     * Tests that only messages on specific level or higher level are logged to syslog.
      */
     @Test
-    public void testLogOnSpecificLevel(@ArquillianResource(LoggingServlet.class) URL deployementUrl) throws Exception {
+    public void testLogOnSpecificLevel(@ArquillianResource URL deployementUrl) throws Exception {
+        final BlockingQueue<SyslogServerEventIF> queue = BlockedSyslogServerEventHandler.getQueue();
         setSyslogAttribute("level", "ERROR");
-        queue.poll();
-        makeLogs(deployementUrl, "Logger?text=Syslog");
-        testLog(ERROR_LOG, EXPECTED_ERROR, "ERROR");
-        testLog(FATAL_LOG, EXPECTED_FATAL, "FATAL");
-        String checkFinish = queue.poll(5 * ADJUSTED_SECOND, TimeUnit.MILLISECONDS);
-        Assert.assertNull("this message was logged but wasn't be: " + checkFinish, checkFinish);
+        queue.clear();
+        makeLogs(deployementUrl);
+        testLog(Level.ERROR);
+        testLog(Level.FATAL);
+        final SyslogServerEventIF expectNoOtherMsg = queue.poll(3 * ADJUSTED_SECOND, TimeUnit.MILLISECONDS);
+        Assert.assertNull("No other message was expected in syslog.", expectNoOtherMsg);
     }
 
-    /*
-     * test that there is no log if syslog is disabled
+    /**
+     * Tests that there is no log if the syslog handler is disabled.
      */
     @Test
-    public void testDisabledSyslog(@ArquillianResource(LoggingServlet.class) URL deployementUrl) throws Exception {
+    public void testDisabledSyslog(@ArquillianResource URL deployementUrl) throws Exception {
+        final BlockingQueue<SyslogServerEventIF> queue = BlockedSyslogServerEventHandler.getQueue();
         setSyslogAttribute("level", "TRACE");
-        setSyslogAttribute("enabled", "false");
+        setSyslogAttribute(ENABLED, "false");
+        queue.clear();
         try {
-            queue.poll();
-            makeLogs(deployementUrl, "Logger?text=Syslog");
-            String checkFinish = queue.poll(5 * ADJUSTED_SECOND, TimeUnit.MILLISECONDS);
-            Assert.assertNull("this message was logged but wasn't be: " + checkFinish, checkFinish);
+            makeLogs(deployementUrl);
+            final SyslogServerEventIF expetNoMsg = queue.poll(5 * ADJUSTED_SECOND, TimeUnit.MILLISECONDS);
+            Assert.assertNull("No syslog message expected.", expetNoMsg);
         } finally {
-            setSyslogAttribute("enabled", "true");
+            setSyslogAttribute(ENABLED, "true");
         }
     }
 
-    private void testLog(String level, String expectedLevel, String textLevel) throws Exception {
-        String log = queue.poll(15 * ADJUSTED_SECOND, TimeUnit.MILLISECONDS);
-        Assert.assertNotNull(log);
-        Assert.assertTrue("message on " + textLevel + " level wasn't logged, logged was: " + log,
-                log.contains("Syslog: LoggingServlet is logging " + level + " message"));
-        Assert.assertTrue("message on " + textLevel + " level wasn't logged on expected level, logged was: " + log,
-                log.contains(expectedLevel));
+    /**
+     * Tests if the next message in the syslog is the expected one with the given log-level.
+     * 
+     * @param expectedLevel
+     * @throws Exception
+     */
+    private void testLog(final Logger.Level expectedLevel) throws Exception {
+        SyslogServerEventIF log = BlockedSyslogServerEventHandler.getQueue().poll(15 * ADJUSTED_SECOND, TimeUnit.MILLISECONDS);
+        assertNotNull(log);
+        assertEquals("Message with unexpected Syslog event level received.", getSyslogLevel(expectedLevel), log.getLevel());
+        final String expectedMsg = MessageFormat.format(LoggingServlet.MSG_TEMPLATE, LoggingServlet.getPrefix(LOG_PREFIX),
+                LoggingServlet.getLevelStr(expectedLevel));
+        String msg = log.getMessage();
+        assertEquals("Message with unexpected Syslog event text received.", expectedMsg, msg);
     }
 
+    /**
+     * Convert JBoss Logger.Level to Syslog log level.
+     * 
+     * @param jbossLogLevel
+     * @return
+     */
+    private int getSyslogLevel(Level jbossLogLevel) {
+        final int result;
+        switch (jbossLogLevel) {
+            case TRACE:
+            case DEBUG:
+                result = SyslogConstants.LEVEL_DEBUG;
+                break;
+            case INFO:
+                result = SyslogConstants.LEVEL_INFO;
+                break;
+            case WARN:
+                result = SyslogConstants.LEVEL_WARN;
+                break;
+            case ERROR:
+                result = SyslogConstants.LEVEL_ERROR;
+                break;
+            case FATAL:
+                result = SyslogConstants.LEVEL_EMERGENCY;
+                break;
+            default:
+                // unexpected
+                result = SyslogConstants.LEVEL_CRITICAL;
+                break;
+        }
+        return result;
+    }
+
+    /**
+     * Sets a single attribute of the syslog handler in AS configuration.
+     * 
+     * @param attribute
+     * @param level
+     * @throws Exception
+     */
     private void setSyslogAttribute(String attribute, String level) throws Exception {
-        ModelNode op = new ModelNode();
-        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-        op.get(OP_ADDR).add("logging-profile", "syslog-profile");
-        op.get(OP_ADDR).add("syslog-handler", "SYSLOG");
-        op.get("name").set(attribute);
-        op.get("value").set(level);
+        final ModelNode op = Util.createOperation(WRITE_ATTRIBUTE_OPERATION, SYSLOG_HANDLER_ADDR);
+        op.get(NAME).set(attribute);
+        op.get(VALUE).set(level);
         Utils.applyUpdate(op, managementClient.getControllerClient());
     }
 
-    private void makeLogs(URL deployementUrl, String spec) throws MalformedURLException, IOException {
-        URL url = new URL(deployementUrl, spec);
+    /**
+     * Get request for {@link LoggingServlet}, which creates log entries.
+     * 
+     * @param deployementUrl
+     * @throws MalformedURLException
+     * @throws IOException
+     */
+    private void makeLogs(final URL deployementUrl) throws MalformedURLException, IOException {
+        URL url = new URL(deployementUrl, LOGGER_QUERY);
         HttpURLConnection http = (HttpURLConnection) url.openConnection();
         int statusCode = http.getResponseCode();
         assertTrue("Invalid response statusCode: " + statusCode, statusCode == HttpServletResponse.SC_OK);
@@ -196,58 +253,41 @@ public class SyslogHandlerTestCase extends AbstractLoggingTest {
 
     static class SyslogHandlerTestCaseSetup implements ServerSetupTask {
 
-        private static SyslogServerIF server;
-
         @Override
         public void setup(ManagementClient managementClient, String containerId) throws Exception {
-
             LOGGER.info("starting syslog server on port " + PORT);
 
-            queue = new LinkedBlockingQueue<String>();
-            // start and set syslog server
-            try {
-                server = SyslogServer.getInstance(SyslogConstants.UDP);
-                server.getConfig().setPort(PORT);
-                SyslogServerEventHandlerIF eventHandler = new BlockedSyslogServerEventHandler(queue);
-                server.getConfig().addEventHandler(eventHandler);
-                SyslogServer.getThreadedInstance(SyslogConstants.UDP);
-                LOGGER.info("syslog server is running");
-            } catch (Exception ex) {
-                LOGGER.info("Exception during starting syslog server!");
-                throw ex;
-            }
+            // clear created server instances (TCP/UDP)
+            SyslogServer.shutdown();
+            // create a new UDP instance
+            final UDPSyslogServerConfig config = new UDPSyslogServerConfig();
+            config.setPort(PORT);
+            config.setUseStructuredData(true);
+            config.addEventHandler(new BlockedSyslogServerEventHandler());
+            SyslogServer.createInstance(UDP, config);
+            // start syslog server
+            SyslogServer.getThreadedInstance(SyslogConstants.UDP);
 
-            ModelNode op;
-            ModelNode result;
-            ModelControllerClient client = managementClient.getControllerClient();
+            final ModelNode compositeOp = new ModelNode();
+            compositeOp.get(OP).set(COMPOSITE);
+            compositeOp.get(OP_ADDR).setEmptyList();
+            final ModelNode steps = compositeOp.get(STEPS);
 
             // create syslog-profile
-            op = new ModelNode();
-            op.get(OP).set(ADD);
-            op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-            op.get(OP_ADDR).add("logging-profile", "syslog-profile");
-            Utils.applyUpdate(op, client);
+            steps.add(Util.createAddOperation(SYSLOG_PROFILE_ADDR));
 
-            op = new ModelNode();
-            op.get(OP).set(ADD);
-            op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-            op.get(OP_ADDR).add("logging-profile", "syslog-profile");
-            op.get(OP_ADDR).add("syslog-handler", "SYSLOG");
+            ModelNode op = Util.createAddOperation(SYSLOG_HANDLER_ADDR);
             op.get("level").set("TRACE");
             op.get("port").set(PORT);
             op.get("enabled").set("true");
-            Utils.applyUpdate(op, client);
+            steps.add(op);
 
-            op = new ModelNode();
-            op.get(OP).set(ADD);
-            op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-            op.get(OP_ADDR).add("logging-profile", "syslog-profile");
-            op.get(OP_ADDR).add("root-logger", "ROOT");
+            op = Util.createAddOperation(SYSLOG_PROFILE_ADDR.append("root-logger", "ROOT"));
             op.get("level").set("TRACE");
-            ModelNode handlers = op.get("handlers");
-            handlers.add("SYSLOG");
-            op.get("handlers").set(handlers);
-            Utils.applyUpdate(op, client);
+            op.get("handlers").add("SYSLOG");
+            steps.add(op);
+
+            Utils.applyUpdate(compositeOp, managementClient.getControllerClient());
 
             LOGGER.info("syslog server setup complete");
         }
@@ -256,34 +296,26 @@ public class SyslogHandlerTestCase extends AbstractLoggingTest {
         public void tearDown(ManagementClient managementClient, String containerId) throws Exception {
             // stop syslog server
             LOGGER.info("stopping syslog server");
-            server.shutdown();
-            server.setThread(null);
-            server.getConfig().removeAllEventHandlers();
+            SyslogServer.shutdown();
             LOGGER.info("syslog server stopped");
 
             // remove syslog-profile
-            ModelNode op = new ModelNode();
-            op.get(OP).set(REMOVE);
-            op.get(OP_ADDR).add(SUBSYSTEM, "logging");
-            op.get(OP_ADDR).add("logging-profile", "syslog-profile");
-            Utils.applyUpdate(op, managementClient.getControllerClient());
-
-            LOGGER.info("syslog server shutdown complete");
+            Utils.applyUpdate(Util.createRemoveOperation(SYSLOG_PROFILE_ADDR), managementClient.getControllerClient());
+            LOGGER.info("syslog server logging profile removed");
         }
     }
 
     private static class BlockedSyslogServerEventHandler implements SyslogServerEventHandlerIF {
 
         private static final long serialVersionUID = -3814601581286016000L;
-        private BlockingQueue<String> queue = new LinkedBlockingQueue<String>();
+        private static final BlockingQueue<SyslogServerEventIF> queue = new LinkedBlockingQueue<SyslogServerEventIF>();
 
-        public BlockedSyslogServerEventHandler(BlockingQueue<String> queue) throws IOException {
-            this.queue = queue;
+        public static BlockingQueue<SyslogServerEventIF> getQueue() {
+            return queue;
         }
 
         public void event(SyslogServerIF syslogServer, SyslogServerEventIF event) {
-            String level = SyslogUtility.getLevelString(event.getLevel());
-            queue.offer(level + " " + event.getMessage());
+            queue.offer(event);
         }
     }
 }

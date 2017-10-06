@@ -177,7 +177,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     public static Archive<?> createEntryBeanDeployment() {
         return ShrinkWrap.create(JavaArchive.class, JAR_ENTRY_EJB + ".jar")
                 .addClasses(EntryBean.class, EntryBeanSFSB.class, Entry.class, WhoAmI.class, ReAuthnType.class,
-                        SeccontextUtil.class)
+                        SeccontextUtil.class, CallAnotherBeanInfo.class)
                 .addAsManifestResource(createPermissionsXmlAsset(new ElytronPermission("authenticate"),
                         new ElytronPermission("getPrivateCredentials"), new ElytronPermission("getSecurityDomain"),
                         new SocketPermission(TestSuiteEnvironment.getServerAddressNode1() + ":8180", "connect,resolve")),
@@ -394,7 +394,13 @@ public abstract class AbstractSecurityContextPropagationTestBase {
                     SeccontextUtil.getRemoteEjbName(JAR_ENTRY_EJB, "EntryBean", Entry.class.getName(), isEntryStateful()),
                     server1.getApplicationRemotingUrl());
             final String server2Url = server2.getApplicationRemotingUrl();
-            return bean.doubleWhoAmI(username, password, type, server2Url, isWhoAmIStateful());
+            return bean.doubleWhoAmI(new CallAnotherBeanInfo.Builder()
+                    .username(username)
+                    .password(password)
+                    .type(type)
+                    .providerUrl(server2Url)
+                    .statefullWhoAmI(isWhoAmIStateful())
+                    .build());
         };
     }
 

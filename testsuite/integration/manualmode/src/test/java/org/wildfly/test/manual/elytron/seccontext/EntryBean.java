@@ -56,16 +56,15 @@ public class EntryBean implements Entry {
     }
 
     @Override
-    public String[] doubleWhoAmI(String username, String password, ReAuthnType type, final String providerUrl,
-            boolean statefullWhoAmI) {
+    public String[] doubleWhoAmI(CallAnotherBeanInfo info) {
         String[] result = new String[2];
         result[0] = context.getCallerPrincipal().getName();
 
         final Callable<String> callable = () -> {
-            return getWhoAmIBean(providerUrl, statefullWhoAmI).getCallerPrincipal().getName();
+            return getWhoAmIBean(info.getProviderUrl(), info.isStatefullWhoAmI()).getCallerPrincipal().getName();
         };
         try {
-            result[1] = switchIdentity(username, password, callable, type);
+            result[1] = switchIdentity(info.getUsername(), info.getPassword(), callable, info.getType());
         } catch (Exception e) {
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));

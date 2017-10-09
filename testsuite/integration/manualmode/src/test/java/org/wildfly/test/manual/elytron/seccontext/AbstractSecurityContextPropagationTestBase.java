@@ -15,6 +15,7 @@
  */
 package org.wildfly.test.manual.elytron.seccontext;
 
+import java.io.BufferedWriter;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
 import static javax.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
@@ -40,6 +41,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -51,6 +53,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.List;
@@ -102,6 +105,10 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.wildfly.security.permission.ElytronPermission;
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.FIRST_SERVER_CHAIN_EJB;
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.JAR_ENTRY_EJB_SERVER_CHAIN;
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.SERVER3;
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOAMI_SERVER_CHAIN;
 
 /**
  * Tests for testing (re)authentication and security identity propagation between servers. Test scenarios use following
@@ -112,6 +119,7 @@ import org.wildfly.security.permission.ElytronPermission;
  * EJBs used for testing:
  * - WhoAmIBean & WhoAmIBeanSFSB - protected (whoami and admin roles are allowed), just returns caller principal
  * - EntryBean & EntryBeanSFSB - protected (entry and admin roles are allowed), configures identity propagation and calls a remote WhoAmIBean
+ * - FirstServerChainBean - protected (TODO which roles are allowed), configures identity propagation and calls a remote EntryBean
  *
  * Servlets used for testing:
  * - WhoAmIServlet - protected (servlet and admin roles are allowed) - just returns name of the incoming user name
@@ -120,6 +128,7 @@ import org.wildfly.security.permission.ElytronPermission;
  * Deployments used for testing:
  * - entry-ejb.jar (EntryBean & EntryBeanSFSB)
  * - whoami.war (WhoAmIBean & WhoAmIBeanSFSB, WhoAmIServlet)
+ * - first-server-ejb.war (FirstServerChainBean)
  * - entry-servlet-basic.war (EntryServlet, WhoAmIServlet) - authentication mechanism BASIC
  * - entry-servlet-form.war (EntryServlet, WhoAmIServlet) - authentication mechanism FORM
  * - entry-servlet-bearer.war (EntryServlet, WhoAmIServlet) - authentication mechanism BEARER_TOKEN
@@ -131,10 +140,14 @@ import org.wildfly.security.permission.ElytronPermission;
  *   * entry-servlet-basic.war
  *   * entry-servlet-form.war
  *   * entry-servlet-bearer.war
+ *   * first-server-chain.war
  * - seccontext-server1-backup (standalone-ha.xml - creates cluster with seccontext-server1) -
  *   * entry-servlet-form.war
  * - seccontext-server2 (standalone-ha.xml)
  *   * whoami.war
+ *   * entry-ejb-server-chain.jar (used for server chain scenarios)
+ * - seccontext-server3
+ *   * whoami-server-chain.jar (used for server chain scenarios)
  *
  * Users used for testing (username==password==role):
  * - entry
@@ -142,6 +155,7 @@ import org.wildfly.security.permission.ElytronPermission;
  * - servlet
  * - admin
  * - server (has configured additional permission - RunAsPrincipalPermission)
+ * - another-server (used for server chain scenarios)
  * - server-norunas
  * </pre>
  *
@@ -239,14 +253,56 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     }
 
     /**
+     * Creates deployment with FirstServerChain bean - to be placed on the first server.
+     */
+    @Deployment(name = FIRST_SERVER_CHAIN_EJB, managed = false, testable = false)
+    @TargetsContainer(SERVER1)
+    public static Archive<?> createServerChain1Deployment() {
+        return ShrinkWrap.create(JavaArchive.class, FIRST_SERVER_CHAIN_EJB + ".jar")
+                .addClasses(FirstServerChainBean.class, FirstServerChain.class, Entry.class, ReAuthnType.class,
+                        SeccontextUtil.class, CallAnotherBeanInfo.class)
+                .addAsManifestResource(createPermissionsXmlAsset(new ElytronPermission("authenticate"),
+                                new ElytronPermission("getPrivateCredentials"), new ElytronPermission("getSecurityDomain"),
+                                new SocketPermission(TestSuiteEnvironment.getServerAddressNode1() + ":8180", "connect,resolve")),
+                        "permissions.xml")
+                .addAsManifestResource(Utils.getJBossEjb3XmlAsset("seccontext-entry"), "jboss-ejb3.xml");
+    }
+
+    /**
+     * Creates deployment with Entry bean - to be placed on the second server.
+     */
+    @Deployment(name = JAR_ENTRY_EJB_SERVER_CHAIN, managed = false, testable = false)
+    @TargetsContainer(SERVER2)
+    public static Archive<?> createServerChain2Deployment() {
+        return ShrinkWrap.create(JavaArchive.class, JAR_ENTRY_EJB_SERVER_CHAIN + ".jar")
+                .addClasses(EntryBean.class, EntryBeanSFSB.class, Entry.class, WhoAmI.class, ReAuthnType.class,
+                        SeccontextUtil.class, CallAnotherBeanInfo.class)
+                .addAsManifestResource(createPermissionsXmlAsset(new ElytronPermission("authenticate"),
+                                new ElytronPermission("getPrivateCredentials"), new ElytronPermission("getSecurityDomain"),
+                                new SocketPermission(TestSuiteEnvironment.getServerAddressNode1() + ":8330", "connect,resolve")),
+                        "permissions.xml")
+                .addAsManifestResource(Utils.getJBossEjb3XmlAsset("seccontext-entry"), "jboss-ejb3.xml");
+    }
+
+    /**
+     * Creates deployment with WhoAmI bean - to be placed on the third server.
+     */
+    @Deployment(name = WAR_WHOAMI_SERVER_CHAIN, managed = false, testable = false)
+    @TargetsContainer(SERVER3)
+    public static Archive<?> createServerChain3Deployment() {
+        return ShrinkWrap.create(JavaArchive.class, WAR_WHOAMI_SERVER_CHAIN + ".jar")
+                .addClasses(WhoAmIBean.class, WhoAmIBeanSFSB.class, WhoAmI.class)
+                .addAsManifestResource(Utils.getJBossEjb3XmlAsset("seccontext-whoami"), "jboss-ejb3.xml");
+    }
+
+    /**
      * Start servers (if not yet started) and if it's the first execution it sets configuration of test servers and deploys test
      * applications.
      */
     @Before
     public void before() throws CommandLineException, IOException, MgmtOperationException {
-        server1.resetContainerConfiguration(JAR_ENTRY_EJB, WAR_ENTRY_SERVLET_BASIC, WAR_ENTRY_SERVLET_FORM,
-                WAR_ENTRY_SERVLET_BEARER_TOKEN);
-        server2.resetContainerConfiguration(WAR_WHOAMI);
+        setupServer1();
+        setupServer2();
     }
 
     /**
@@ -256,6 +312,25 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     public static void afterClass() throws IOException {
         server1.shutDown();
         server2.shutDown();
+    }
+
+    /**
+     * Setup seccontext-server1.
+     */
+    protected void setupServer1() throws CommandLineException, IOException, MgmtOperationException {
+        server1.resetContainerConfiguration(new ServerConfigurationBuilder()
+                .withDeployments(JAR_ENTRY_EJB, WAR_ENTRY_SERVLET_BASIC, WAR_ENTRY_SERVLET_FORM,
+                        WAR_ENTRY_SERVLET_BEARER_TOKEN, FIRST_SERVER_CHAIN_EJB)
+                .build());
+    }
+
+    /**
+     * Setup seccontext-server2.
+     */
+    protected void setupServer2() throws CommandLineException, IOException, MgmtOperationException {
+        server2.resetContainerConfiguration(new ServerConfigurationBuilder()
+                .withDeployments(WAR_WHOAMI, JAR_ENTRY_EJB_SERVER_CHAIN)
+                .build());
     }
 
     /**
@@ -488,7 +563,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
             this.portOffset = portOffset;
         }
 
-        public void resetContainerConfiguration(String... deployments)
+        public void resetContainerConfiguration(ServerConfiguration config)
                 throws CommandLineException, IOException, MgmtOperationException {
             if (!containerController.isStarted(name)) {
                 containerController.start(name);
@@ -499,19 +574,20 @@ public abstract class AbstractSecurityContextPropagationTestBase {
 
                 if (snapshot == null) {
                     // configure each server just once
-                    createPropertyFile();
+                    createPropertyFile(config.getAdditionalUsers());
                     final File cliFIle = File.createTempFile("seccontext-", ".cli");
                     try (FileOutputStream fos = new FileOutputStream(cliFIle)) {
                         IOUtils.copy(
                                 AbstractSecurityContextPropagationTestBase.class.getResourceAsStream("seccontext-setup.cli"),
                                 fos);
                     }
+                    addCliCommands(cliFIle, config.getCliCommands());
                     runBatch(cliFIle);
                     switchJGroupsToTcpping();
                     cliFIle.delete();
                     reload();
 
-                    for (String deployment : deployments) {
+                    for (String deployment : config.getDeployments()) {
                         deployer.deploy(deployment);
                     }
 
@@ -634,14 +710,85 @@ public abstract class AbstractSecurityContextPropagationTestBase {
          * Create single property file with users and/or roles in standalone server config directory. It will be used for
          * property-realm configuration (see {@code seccontext-setup.cli} script)
          */
-        private void createPropertyFile() throws IOException {
+        private void createPropertyFile(List<String> additionalUsers) throws IOException {
             sendLine("/core-service=platform-mbean/type=runtime:read-attribute(name=system-properties)", false);
             assertTrue(consoleOut.size() > 0);
             ModelNode node = ModelNode.fromStream(new ByteArrayInputStream(consoleOut.toByteArray()));
             String configDirPath = node.get(ModelDescriptionConstants.RESULT).get("jboss.server.config.dir").asString();
+            List<String> users = new ArrayList<>();
+            users.add("admin");
+            users.add("servlet");
+            users.add("entry");
+            users.add("whoami");
+            users.add("server");
+            users.add("server-norunas");
+            users.addAll(additionalUsers);
+            String[] usersArr = new String[users.size()];
+            usersArr = users.toArray(usersArr);
             Files.write(Paths.get(configDirPath, "seccontext.properties"),
-                    Utils.createUsersFromRoles("admin", "servlet", "entry", "whoami", "server", "server-norunas")
-                            .getBytes(StandardCharsets.ISO_8859_1));
+                    Utils.createUsersFromRoles(usersArr).getBytes(StandardCharsets.ISO_8859_1));
         }
+
+        private void addCliCommands(File file, List<String> commands) throws IOException {
+            try (BufferedWriter bw = new BufferedWriter(new FileWriter(file, true))) {
+                for (String command : commands) {
+                    bw.append(command);
+                }
+            }
+
+        }
+    }
+
+    protected static class ServerConfiguration {
+
+        private final List<String> deployments;
+        private final List<String> additionalUsers;
+        private final List<String> cliCommands;
+
+        private ServerConfiguration(ServerConfigurationBuilder builder) {
+            this.deployments = builder.deployments;
+            this.additionalUsers = builder.additionalUsers;
+            this.cliCommands = builder.cliCommands;
+        }
+
+        public List<String> getDeployments() {
+            return deployments;
+        }
+
+        public List<String> getAdditionalUsers() {
+            return additionalUsers;
+        }
+
+        public List<String> getCliCommands() {
+            return cliCommands;
+        }
+
+    }
+
+    protected static class ServerConfigurationBuilder {
+
+        private List<String> deployments = new ArrayList<>();
+        private List<String> additionalUsers = new ArrayList<>();
+        private List<String> cliCommands = new ArrayList<>();
+
+        public ServerConfigurationBuilder withDeployments(String... deployments) {
+            this.deployments.addAll(Arrays.asList(deployments));
+            return this;
+        }
+
+        public ServerConfigurationBuilder withAdditionalUsers(String... additionalUsers) {
+            this.additionalUsers.addAll(Arrays.asList(additionalUsers));
+            return this;
+        }
+
+        public ServerConfigurationBuilder withCliCommands(String... cliCommands) {
+            this.cliCommands.addAll(Arrays.asList(cliCommands));
+            return this;
+        }
+
+        public ServerConfiguration build() {
+            return new ServerConfiguration(this);
+        }
+
     }
 }

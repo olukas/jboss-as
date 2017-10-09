@@ -132,6 +132,22 @@
             </configuration>
         </container>
 
+        <container qualifier="seccontext-server3" default="false" mode="manual">
+            <configuration>
+                <property name="jbossHome">${basedir}/target/seccontext-server3</property>
+                <property name="javaVmArguments">${server.jvm2.args} -Djboss.socket.binding.port-offset=250 -Djboss.inst=${basedir}/target/seccontext-server3 -Djboss.node.name=seccontext-server3</property>
+                <property name="serverConfig">standalone.xml</property>
+                <property name="jbossArguments">${jboss.args}</property>
+                <property name="allowConnectingToRunningServer">true</property>
+                <property name="managementAddress">${node1}</property>
+                <property name="managementPort">10240</property>
+
+                <!-- AS7-4070 -->
+                <property name="waitForPorts">${as.debug.port.node1} 10240</property>
+                <property name="waitForPortsTimeoutInSeconds">8</property>
+            </configuration>
+        </container>
+
         <container qualifier="jbossas-with-remote-outbound-connection-non-clustered" default="false" mode="manual">
             <configuration>
                 <property name="jbossHome">${basedir}/target/jbossas-with-remote-outbound-connection</property>

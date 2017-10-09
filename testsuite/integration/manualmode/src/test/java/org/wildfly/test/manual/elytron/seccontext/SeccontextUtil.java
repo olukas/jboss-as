@@ -45,6 +45,10 @@ public class SeccontextUtil {
      * Name of the second (target) server in arquillian configuration.
      */
     public static final String SERVER2 = "seccontext-server2";
+    /**
+     * Name of the third (target for server chain) server in arquillian configuration.
+     */
+    public static final String SERVER3 = "seccontext-server3";
 
     /**
      * Name of deployment which contains EntryBean EJB.
@@ -54,6 +58,9 @@ public class SeccontextUtil {
      * Name of deployment which contains WhoAmI bean and WhoAmIServlet.
      */
     public static final String WAR_WHOAMI = "whoami";
+    public static final String FIRST_SERVER_CHAIN_EJB = "first-server-chain";
+    public static final String JAR_ENTRY_EJB_SERVER_CHAIN = JAR_ENTRY_EJB + "-server-chain";
+    public static final String WAR_WHOAMI_SERVER_CHAIN = WAR_WHOAMI + "-server-chain";
     /**
      * Name of deployment which contains secured EntryServlet with BASIC HTTP authentication mechanism configured.
      */

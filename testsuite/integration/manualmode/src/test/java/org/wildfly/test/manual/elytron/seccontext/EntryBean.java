@@ -15,7 +15,6 @@
  */
 package org.wildfly.test.manual.elytron.seccontext;
 
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOAMI;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.switchIdentity;
 
 import java.io.BufferedReader;
@@ -35,6 +34,7 @@ import javax.ejb.Stateless;
 import javax.ejb.TransactionAttribute;
 import javax.ejb.TransactionAttributeType;
 import javax.naming.NamingException;
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOAMI;
 
 /**
  * Stateless EJB responsible for calling remote EJB or Servlet.
@@ -61,7 +61,8 @@ public class EntryBean implements Entry {
         result[0] = context.getCallerPrincipal().getName();
 
         final Callable<String> callable = () -> {
-            return getWhoAmIBean(info.getProviderUrl(), info.isStatefullWhoAmI()).getCallerPrincipal().getName();
+            return getWhoAmIBean(info.getLookupEjbAppName(), info.getProviderUrl(),
+                    info.isStatefullWhoAmI()).getCallerPrincipal().getName();
         };
         try {
             result[1] = switchIdentity(info.getUsername(), info.getPassword(), callable, info.getType());
@@ -106,9 +107,9 @@ public class EntryBean implements Entry {
         return result;
     }
 
-    private WhoAmI getWhoAmIBean(String providerUrl, boolean statefullWhoAmI) throws NamingException {
+    private WhoAmI getWhoAmIBean(String ejbAppName, String providerUrl, boolean statefullWhoAmI) throws NamingException {
         return SeccontextUtil.lookup(
-                SeccontextUtil.getRemoteEjbName(WAR_WHOAMI, "WhoAmIBean", WhoAmI.class.getName(), statefullWhoAmI), providerUrl);
+                SeccontextUtil.getRemoteEjbName(ejbAppName == null ? WAR_WHOAMI : ejbAppName, "WhoAmIBean",
+                        WhoAmI.class.getName(), statefullWhoAmI), providerUrl);
     }
-
 }

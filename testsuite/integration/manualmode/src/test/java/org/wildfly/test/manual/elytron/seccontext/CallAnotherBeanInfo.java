@@ -34,6 +34,7 @@ public final class CallAnotherBeanInfo implements Serializable {
     private final ReAuthnType type;
     private final String providerUrl;
     private final Boolean statefullWhoAmI;
+    private final String lookupEjbAppName;
 
     private CallAnotherBeanInfo(Builder builder) {
         this.username = builder.username;
@@ -41,6 +42,7 @@ public final class CallAnotherBeanInfo implements Serializable {
         this.type = builder.type;
         this.providerUrl = builder.providerUrl;
         this.statefullWhoAmI = builder.statefullWhoAmI;
+        this.lookupEjbAppName = builder.lookupEjbAppName;
     }
 
     public String getUsername() {
@@ -63,6 +65,10 @@ public final class CallAnotherBeanInfo implements Serializable {
         return statefullWhoAmI;
     }
 
+    public String getLookupEjbAppName() {
+        return lookupEjbAppName;
+    }
+
     public static final class Builder {
 
         private String username;
@@ -70,6 +76,7 @@ public final class CallAnotherBeanInfo implements Serializable {
         private ReAuthnType type;
         private String providerUrl;
         private boolean statefullWhoAmI;
+        private String lookupEjbAppName;
 
         public Builder username(String username) {
             this.username = username;
@@ -93,6 +100,11 @@ public final class CallAnotherBeanInfo implements Serializable {
 
         public Builder statefullWhoAmI(Boolean statefullWhoAmI) {
             this.statefullWhoAmI = statefullWhoAmI;
+            return this;
+        }
+
+        public Builder lookupEjbAppName(String lookupEjbAppName) {
+            this.lookupEjbAppName = lookupEjbAppName;
             return this;
         }
 

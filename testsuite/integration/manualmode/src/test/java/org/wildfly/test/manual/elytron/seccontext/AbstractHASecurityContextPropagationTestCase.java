@@ -53,7 +53,9 @@ public abstract class AbstractHASecurityContextPropagationTestCase extends Abstr
      */
     @Before
     public void startServer1backup() throws CommandLineException, IOException, MgmtOperationException {
-        server1backup.resetContainerConfiguration(WAR_ENTRY_SERVLET_FORM + "backup");
+        server1backup.resetContainerConfiguration(new ServerConfigurationBuilder()
+                .withDeployments(WAR_ENTRY_SERVLET_FORM + "backup")
+                .build());
     }
 
     /**

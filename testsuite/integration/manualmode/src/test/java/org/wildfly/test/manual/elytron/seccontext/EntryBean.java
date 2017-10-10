@@ -15,6 +15,7 @@
  */
 package org.wildfly.test.manual.elytron.seccontext;
 
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOAMI;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.switchIdentity;
 
 import java.io.BufferedReader;
@@ -34,7 +35,6 @@ import javax.ejb.Stateless;
 import javax.ejb.TransactionAttribute;
 import javax.ejb.TransactionAttributeType;
 import javax.naming.NamingException;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOAMI;
 
 /**
  * Stateless EJB responsible for calling remote EJB or Servlet.
@@ -42,8 +42,8 @@ import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOA
  * @author Josef Cacek
  */
 @Stateless
-@RolesAllowed({"entry", "admin", "no-server2-identity"})
-@DeclareRoles({"entry", "whoami", "servlet", "admin", "no-server2-identity"})
+@RolesAllowed({ "entry", "admin", "no-server2-identity", "authz" })
+@DeclareRoles({ "entry", "whoami", "servlet", "admin", "no-server2-identity", "authz" })
 @TransactionAttribute(TransactionAttributeType.NOT_SUPPORTED)
 public class EntryBean implements Entry {
 
@@ -65,7 +65,7 @@ public class EntryBean implements Entry {
                     info.isStatefullWhoAmI()).getCallerPrincipal().getName();
         };
         try {
-            result[1] = switchIdentity(info.getUsername(), info.getPassword(), callable, info.getType());
+            result[1] = switchIdentity(info.getUsername(), info.getPassword(), info.getAuthzName(), callable, info.getType());
         } catch (Exception e) {
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));

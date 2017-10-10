@@ -52,6 +52,7 @@ public class EntryServlet extends HttpServlet {
     public static final String PARAM_REAUTHN_TYPE = "reAuthnType";
     public static final String PARAM_STATEFULL = "statefull";
     public static final String PARAM_CREATE_SESSION = "createSession";
+    public static final String PARAM_AUTHZ_NAME = "authzName";
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -62,6 +63,7 @@ public class EntryServlet extends HttpServlet {
         final String type = req.getParameter(PARAM_REAUTHN_TYPE);
         final String statefull = req.getParameter(PARAM_STATEFULL);
         final String createSession = req.getParameter(PARAM_CREATE_SESSION);
+        final String authzName = req.getParameter(PARAM_AUTHZ_NAME);
 
         if (Boolean.parseBoolean(createSession)) {
             req.getSession();
@@ -75,7 +77,7 @@ public class EntryServlet extends HttpServlet {
             return getWhoAmIBean(providerUrl, Boolean.parseBoolean(statefull)).getCallerPrincipal().getName();
         };
         try {
-            writer.write(SeccontextUtil.switchIdentity(username, password, callable, reAuthnType));
+            writer.write(SeccontextUtil.switchIdentity(username, password, authzName, callable, reAuthnType));
         } catch (Exception e) {
             e.printStackTrace(writer);
         } finally {

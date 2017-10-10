@@ -41,6 +41,7 @@ public enum ReAuthnType {
      * Use AuthenticationConfiguration to configure new identity to be used in Elytron. ({@code AuthenticationConfiguration.useName(name).usePassword(password)})
      */
     AC_AUTHENTICATION,
+    AC_AUTHORIZATION,
     /**
      * Use Elytron SecurityDomain API to (re-)authenticate to the current security domain.
      * ({@code SecurityDomain.getCurrent().authenticate(username, new PasswordGuessEvidence(password))})

@@ -15,7 +15,6 @@
  */
 package org.wildfly.test.manual.elytron.seccontext;
 
-import java.io.BufferedWriter;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
 import static javax.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
@@ -30,13 +29,13 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.JAR_ENTRY_EJB;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.SERVER1;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.SERVER1_BACKUP;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.SERVER2;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_BASIC;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_BEARER_TOKEN;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_FORM;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOAMI;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -58,7 +57,6 @@ import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.List;
 import java.util.concurrent.Callable;
-
 import org.apache.commons.io.IOUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -109,8 +107,8 @@ import org.wildfly.security.permission.ElytronPermission;
 /**
  * Tests for testing (re)authentication and security identity propagation between servers. Test scenarios use following
  * configuration.
- * <h3>Given</h3>
  *
+ * <h3>Given</h3>
  * <pre>
  * EJBs used for testing:
  * - WhoAmIBean & WhoAmIBeanSFSB - protected (whoami, admin and no-server2-identity roles are allowed), just returns caller principal
@@ -134,8 +132,6 @@ import org.wildfly.security.permission.ElytronPermission;
  *   * entry-servlet-form.war
  *   * entry-servlet-bearer.war
  *   * first-server-chain.war
- * - seccontext-server1-backup (standalone-ha.xml - creates cluster with seccontext-server1) -
- *   * entry-servlet-form.war
  * - seccontext-server2 (standalone.xml)
  *   * whoami.war
  *
@@ -209,15 +205,6 @@ public abstract class AbstractSecurityContextPropagationTestBase {
         return createEntryServletDeploymentBase(WAR_ENTRY_SERVLET_FORM)
                 .addAsWebInfResource(PACKAGE, "web-form-authn.xml", "web.xml")
                 .addAsWebResource(PACKAGE, "login.html", "login.html").addAsWebResource(PACKAGE, "error.html", "error.html");
-    }
-
-    /**
-     * Creates deployment with Entry servlet and FORM authentication.
-     */
-    @Deployment(name = WAR_ENTRY_SERVLET_FORM + "backup", managed = false, testable = false)
-    @TargetsContainer(SERVER1_BACKUP)
-    public static Archive<?> createDeploymentForBackup() {
-        return createEntryServletFormAuthnDeployment();
     }
 
     /**

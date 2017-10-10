@@ -22,14 +22,15 @@
 package org.wildfly.test.manual.elytron.seccontext;
 
 /**
+ * Tests authorization forwarding within a cluster. See superclass for details.
  *
  * @author Josef Cacek
  */
-public class HASecurityContextPropagationSLSLTestCase extends AbstractHASecurityContextPropagationTestCase {
+public class HAAuthorizationForwardingSFSLTestCase extends AbstractHAAuthorizationForwardingTestCase {
 
     @Override
     protected boolean isEntryStateful() {
-        return false;
+        return true;
     }
 
     @Override

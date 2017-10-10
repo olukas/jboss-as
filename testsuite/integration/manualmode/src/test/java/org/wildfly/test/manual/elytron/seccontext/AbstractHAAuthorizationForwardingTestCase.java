@@ -21,32 +21,52 @@
  */
 package org.wildfly.test.manual.elytron.seccontext;
 
-import java.io.IOException;
-import java.net.URL;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.jboss.as.cli.CommandLineException;
-import org.jboss.as.test.integration.management.util.MgmtOperationException;
 import static org.jboss.as.test.integration.security.common.Utils.REDIRECT_STRATEGY;
-import org.jboss.as.test.shared.TestSuiteEnvironment;
-import org.junit.AfterClass;
 import static org.junit.Assert.assertEquals;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
 import static org.wildfly.test.manual.elytron.seccontext.AbstractSecurityContextPropagationTestBase.server1;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.SERVER1_BACKUP;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_FORM;
 
+import java.io.IOException;
+import java.net.URL;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.jboss.arquillian.container.test.api.Deployment;
+import org.jboss.arquillian.container.test.api.TargetsContainer;
+import org.jboss.as.cli.CommandLineException;
+import org.jboss.as.test.integration.management.util.MgmtOperationException;
+import org.jboss.as.test.shared.TestSuiteEnvironment;
+import org.jboss.shrinkwrap.api.Archive;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Test;
+
 /**
+ * Tests authorization forwarding within a cluster.
  *
+ * <h3>Given</h3>
+ * See the superclass for common implementation details.
+ * <pre>
+ * Additional started and configured servers:
+ * - seccontext-server1-backup (standalone-ha.xml - creates cluster with seccontext-server1) -
+ *   * entry-servlet-form.war
+ * </pre>
  * @author Josef Cacek
  */
-public abstract class AbstractHASecurityContextPropagationTestCase extends AbstractSecurityContextPropagationTestBase {
+public abstract class AbstractHAAuthorizationForwardingTestCase extends AbstractSecurityContextPropagationTestBase {
 
     private static final ServerHolder server1backup = new ServerHolder(SERVER1_BACKUP, TestSuiteEnvironment.getServerAddress(),
             2000);
+
+    /**
+     * Creates deployment with Entry servlet and FORM authentication.
+     */
+    @Deployment(name = WAR_ENTRY_SERVLET_FORM + "backup", managed = false, testable = false)
+    @TargetsContainer(SERVER1_BACKUP)
+    public static Archive<?> createDeploymentForBackup() {
+        return createEntryServletFormAuthnDeployment();
+    }
 
     /**
      * Start server1backup.
@@ -67,7 +87,7 @@ public abstract class AbstractHASecurityContextPropagationTestCase extends Abstr
     }
 
     /**
-     * Verifies, the distributable web-app with FORM authentication supports SSO out of the box.
+     * Verifies, the distributable web-app with FORM authentication supports session replication out of the box.
      *
      * <pre>
      * When: HTTP client calls WhoAmIServlet as "admin" (using FORM authn) on first cluster node and then
@@ -92,21 +112,20 @@ public abstract class AbstractHASecurityContextPropagationTestCase extends Abstr
     }
 
     /**
-     * Verifies, the credential forwarding works within clustered SSO (FORM authentication). This simulates failover on
+     * Verifies, the authorization forwarding works within cluster (FORM authn). This simulates failover on
      * distributed web application (e.g. when load balancer is used).
      *
      * <pre>
      * When: HTTP client calls WhoAmIServlet as "admin" (using FORM authn) on second cluster node and then
      *       it calls EntryServlet (without authentication needed) on the first cluster node;
-     *       the EntryServlet uses Elytron API to forward authentication (credentials) to call remote WhoAmIBean
+     *       the EntryServlet uses Elytron API to forward authz name to call remote WhoAmIBean
      * Then: the calls pass and WhoAmIBean returns "admin" username
      * </pre>
      */
     @Test
-    @Ignore("JBEAP-13217")
     public void testServletSsoPropagation() throws Exception {
-        final URL entryServletUrl = getEntryServletUrl(WAR_ENTRY_SERVLET_FORM, null, null,
-                ReAuthnType.FORWARDED_AUTHENTICATION);
+        final URL entryServletUrl = getEntryServletUrl(WAR_ENTRY_SERVLET_FORM, "server", "server",
+                ReAuthnType.FORWARDED_AUTHORIZATION);
         final URL whoamiUrl = new URL(
                 server1backup.getApplicationHttpUrl() + "/" + WAR_ENTRY_SERVLET_FORM + WhoAmIServlet.SERVLET_PATH);
 

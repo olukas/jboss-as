@@ -42,8 +42,8 @@ import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOA
  * @author Josef Cacek
  */
 @Stateless
-@RolesAllowed({ "entry", "admin" })
-@DeclareRoles({ "entry", "whoami", "servlet", "admin" })
+@RolesAllowed({"entry", "admin", "no-server2-identity"})
+@DeclareRoles({"entry", "whoami", "servlet", "admin", "no-server2-identity"})
 @TransactionAttribute(TransactionAttributeType.NOT_SUPPORTED)
 public class EntryBean implements Entry {
 

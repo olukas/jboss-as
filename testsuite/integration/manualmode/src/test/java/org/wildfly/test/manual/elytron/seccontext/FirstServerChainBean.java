@@ -32,16 +32,17 @@ import javax.ejb.Stateless;
 import javax.ejb.TransactionAttribute;
 import javax.ejb.TransactionAttributeType;
 import javax.naming.NamingException;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.JAR_ENTRY_EJB_SERVER_CHAIN;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.switchIdentity;
+import static org.wildfly.test.manual.elytron.seccontext.ServerChainSecurityContextPropagationTestCase.JAR_ENTRY_EJB_SERVER_CHAIN;
 
 /**
+ * Stateless EJB responsible for calling remote EntryBean.
  *
  * @author olukas
  */
 @Stateless
-@RolesAllowed({"entry", "admin"})
-@DeclareRoles({"entry", "whoami", "servlet", "admin"})
+@RolesAllowed({"entry", "admin", "no-server2-identity"})
+@DeclareRoles({"entry", "whoami", "servlet", "admin", "no-server2-identity"})
 @TransactionAttribute(TransactionAttributeType.NOT_SUPPORTED)
 public class FirstServerChainBean implements FirstServerChain {
 
@@ -68,7 +69,6 @@ public class FirstServerChainBean implements FirstServerChain {
             result[1] = resultFromAnotherBeans[0];
             result[2] = resultFromAnotherBeans[1];
         } catch (Exception e) {
-            // toto bude chtit asi lip poresit
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
             result[1] = sw.toString();

@@ -58,9 +58,6 @@ public class SeccontextUtil {
      * Name of deployment which contains WhoAmI bean and WhoAmIServlet.
      */
     public static final String WAR_WHOAMI = "whoami";
-    public static final String FIRST_SERVER_CHAIN_EJB = "first-server-chain";
-    public static final String JAR_ENTRY_EJB_SERVER_CHAIN = JAR_ENTRY_EJB + "-server-chain";
-    public static final String WAR_WHOAMI_SERVER_CHAIN = WAR_WHOAMI + "-server-chain";
     /**
      * Name of deployment which contains secured EntryServlet with BASIC HTTP authentication mechanism configured.
      */

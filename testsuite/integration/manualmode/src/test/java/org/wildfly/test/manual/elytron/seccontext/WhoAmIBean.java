@@ -28,8 +28,8 @@ import javax.ejb.Stateless;
  * @author Josef Cacek
  */
 @Stateless
-@RolesAllowed({ "whoami", "admin" })
-@DeclareRoles({ "entry", "whoami", "servlet", "admin" })
+@RolesAllowed({"whoami", "admin", "no-server2-identity"})
+@DeclareRoles({"entry", "whoami", "servlet", "admin", "no-server2-identity"})
 public class WhoAmIBean implements WhoAmI {
 
     @Resource

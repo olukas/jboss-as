@@ -105,10 +105,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.wildfly.security.permission.ElytronPermission;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.FIRST_SERVER_CHAIN_EJB;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.JAR_ENTRY_EJB_SERVER_CHAIN;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.SERVER3;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOAMI_SERVER_CHAIN;
 
 /**
  * Tests for testing (re)authentication and security identity propagation between servers. Test scenarios use following
@@ -117,22 +113,19 @@ import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOA
  *
  * <pre>
  * EJBs used for testing:
- * - WhoAmIBean & WhoAmIBeanSFSB - protected (whoami and admin roles are allowed), just returns caller principal
- * - EntryBean & EntryBeanSFSB - protected (entry and admin roles are allowed), configures identity propagation and calls a remote WhoAmIBean
- * - FirstServerChainBean - protected (TODO which roles are allowed), configures identity propagation and calls a remote EntryBean
+ * - WhoAmIBean & WhoAmIBeanSFSB - protected (whoami, admin and no-server2-identity roles are allowed), just returns caller principal
+ * - EntryBean & EntryBeanSFSB - protected (entry, admin and no-server2-identity roles are allowed), configures identity propagation and calls a remote WhoAmIBean
  *
  * Servlets used for testing:
  * - WhoAmIServlet - protected (servlet and admin roles are allowed) - just returns name of the incoming user name
- * - EntryServlet - protecte (servlet and admin roles are allowed) - configures identity propagation and calls a remote WhoAmIBean
+ * - EntryServlet - protected (servlet and admin roles are allowed) - configures identity propagation and calls a remote WhoAmIBean
  *
  * Deployments used for testing:
  * - entry-ejb.jar (EntryBean & EntryBeanSFSB)
  * - whoami.war (WhoAmIBean & WhoAmIBeanSFSB, WhoAmIServlet)
- * - first-server-ejb.war (FirstServerChainBean)
  * - entry-servlet-basic.war (EntryServlet, WhoAmIServlet) - authentication mechanism BASIC
  * - entry-servlet-form.war (EntryServlet, WhoAmIServlet) - authentication mechanism FORM
  * - entry-servlet-bearer.war (EntryServlet, WhoAmIServlet) - authentication mechanism BEARER_TOKEN
- *
  *
  * Servers started and configured for context propagation scenarios:
  * - seccontext-server1 (standalone-ha.xml)
@@ -143,11 +136,8 @@ import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOA
  *   * first-server-chain.war
  * - seccontext-server1-backup (standalone-ha.xml - creates cluster with seccontext-server1) -
  *   * entry-servlet-form.war
- * - seccontext-server2 (standalone-ha.xml)
+ * - seccontext-server2 (standalone.xml)
  *   * whoami.war
- *   * entry-ejb-server-chain.jar (used for server chain scenarios)
- * - seccontext-server3
- *   * whoami-server-chain.jar (used for server chain scenarios)
  *
  * Users used for testing (username==password==role):
  * - entry
@@ -157,6 +147,7 @@ import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOA
  * - server (has configured additional permission - RunAsPrincipalPermission)
  * - another-server (used for server chain scenarios)
  * - server-norunas
+ * - no-server2-identity
  * </pre>
  *
  * @see ReAuthnType reauthentication types
@@ -253,49 +244,6 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     }
 
     /**
-     * Creates deployment with FirstServerChain bean - to be placed on the first server.
-     */
-    @Deployment(name = FIRST_SERVER_CHAIN_EJB, managed = false, testable = false)
-    @TargetsContainer(SERVER1)
-    public static Archive<?> createServerChain1Deployment() {
-        return ShrinkWrap.create(JavaArchive.class, FIRST_SERVER_CHAIN_EJB + ".jar")
-                .addClasses(FirstServerChainBean.class, FirstServerChain.class, Entry.class, ReAuthnType.class,
-                        SeccontextUtil.class, CallAnotherBeanInfo.class)
-                .addAsManifestResource(createPermissionsXmlAsset(new ElytronPermission("authenticate"),
-                                new ElytronPermission("getPrivateCredentials"), new ElytronPermission("getSecurityDomain"),
-                                new SocketPermission(TestSuiteEnvironment.getServerAddressNode1() + ":8180", "connect,resolve")),
-                        "permissions.xml")
-                .addAsManifestResource(Utils.getJBossEjb3XmlAsset("seccontext-entry"), "jboss-ejb3.xml");
-    }
-
-    /**
-     * Creates deployment with Entry bean - to be placed on the second server.
-     */
-    @Deployment(name = JAR_ENTRY_EJB_SERVER_CHAIN, managed = false, testable = false)
-    @TargetsContainer(SERVER2)
-    public static Archive<?> createServerChain2Deployment() {
-        return ShrinkWrap.create(JavaArchive.class, JAR_ENTRY_EJB_SERVER_CHAIN + ".jar")
-                .addClasses(EntryBean.class, EntryBeanSFSB.class, Entry.class, WhoAmI.class, ReAuthnType.class,
-                        SeccontextUtil.class, CallAnotherBeanInfo.class)
-                .addAsManifestResource(createPermissionsXmlAsset(new ElytronPermission("authenticate"),
-                                new ElytronPermission("getPrivateCredentials"), new ElytronPermission("getSecurityDomain"),
-                                new SocketPermission(TestSuiteEnvironment.getServerAddressNode1() + ":8330", "connect,resolve")),
-                        "permissions.xml")
-                .addAsManifestResource(Utils.getJBossEjb3XmlAsset("seccontext-entry"), "jboss-ejb3.xml");
-    }
-
-    /**
-     * Creates deployment with WhoAmI bean - to be placed on the third server.
-     */
-    @Deployment(name = WAR_WHOAMI_SERVER_CHAIN, managed = false, testable = false)
-    @TargetsContainer(SERVER3)
-    public static Archive<?> createServerChain3Deployment() {
-        return ShrinkWrap.create(JavaArchive.class, WAR_WHOAMI_SERVER_CHAIN + ".jar")
-                .addClasses(WhoAmIBean.class, WhoAmIBeanSFSB.class, WhoAmI.class)
-                .addAsManifestResource(Utils.getJBossEjb3XmlAsset("seccontext-whoami"), "jboss-ejb3.xml");
-    }
-
-    /**
      * Start servers (if not yet started) and if it's the first execution it sets configuration of test servers and deploys test
      * applications.
      */
@@ -320,7 +268,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     protected void setupServer1() throws CommandLineException, IOException, MgmtOperationException {
         server1.resetContainerConfiguration(new ServerConfigurationBuilder()
                 .withDeployments(JAR_ENTRY_EJB, WAR_ENTRY_SERVLET_BASIC, WAR_ENTRY_SERVLET_FORM,
-                        WAR_ENTRY_SERVLET_BEARER_TOKEN, FIRST_SERVER_CHAIN_EJB)
+                        WAR_ENTRY_SERVLET_BEARER_TOKEN)
                 .build());
     }
 
@@ -329,7 +277,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
      */
     protected void setupServer2() throws CommandLineException, IOException, MgmtOperationException {
         server2.resetContainerConfiguration(new ServerConfigurationBuilder()
-                .withDeployments(WAR_WHOAMI, JAR_ENTRY_EJB_SERVER_CHAIN)
+                .withDeployments(WAR_WHOAMI)
                 .build());
     }
 

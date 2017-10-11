@@ -83,6 +83,12 @@ public class SeccontextUtil {
      */
     public static <T> T switchIdentity(final String username, final String password, final Callable<T> callable,
             ReAuthnType type) throws Exception {
+        return switchIdentity(username, password, null, callable, type);
+    }
+
+    public static <T> T switchIdentity(final String username, final String password, final String authzName,
+        final Callable<T> callable, ReAuthnType type) throws Exception {
+
         if (type == null) {
             type = ReAuthnType.AC_AUTHENTICATION;
         }
@@ -102,6 +108,17 @@ public class SeccontextUtil {
                 }
                 if (password != null) {
                     authCfg = authCfg.usePassword(password);
+                }
+                return AuthenticationContext.empty().with(MatchRule.ALL, authCfg).runCallable(callable);
+            case AC_AUTHORIZATION:
+                if (username != null) {
+                    authCfg = authCfg.useName(username);
+                }
+                if (password != null) {
+                    authCfg = authCfg.usePassword(password);
+                }
+                if (authzName != null) {
+                    authCfg = authCfg.useAuthorizationName(authzName);
                 }
                 return AuthenticationContext.empty().with(MatchRule.ALL, authCfg).runCallable(callable);
             case SD_AUTHENTICATION:

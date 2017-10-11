@@ -393,6 +393,17 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     }
 
     /**
+     * Creates callable for executing {@link Entry#doubleWhoAmI(String, String, ReAuthnType, String)} as "whoami" user.
+     *
+     * @param type reauthentication reauthentication type used within the doubleWhoAmI
+     * @param authzName - authorization name
+     * @return Callable
+     */
+    protected Callable<String[]> getDoubleWhoAmICallable(final ReAuthnType type, final String authzName) {
+        return getDoubleWhoAmICallable(type, "whoami", "whoami", authzName);
+    }
+
+    /**
      * Creates a callable for executing {@link Entry#doubleWhoAmI(String, String, ReAuthnType, String)} as given user.
      *
      * @param type reauthentication re-authentication type used within the doubleWhoAmI
@@ -401,6 +412,20 @@ public abstract class AbstractSecurityContextPropagationTestBase {
      * @return
      */
     protected Callable<String[]> getDoubleWhoAmICallable(final ReAuthnType type, final String username, final String password) {
+        return getDoubleWhoAmICallable(type, username, password, null);
+    }
+
+    /**
+     * Creates a callable for executing {@link Entry#doubleWhoAmI(String, String, ReAuthnType, String)} as given user.
+     *
+     * @param type reauthentication re-authentication type used within the doubleWhoAmI
+     * @param username
+     * @param password
+     * @param authzName - authorization name
+     * @return
+     */
+    protected Callable<String[]> getDoubleWhoAmICallable(final ReAuthnType type, final String username, final String password,
+        final String authzName) {
         return () -> {
             final Entry bean = SeccontextUtil.lookup(
                     SeccontextUtil.getRemoteEjbName(JAR_ENTRY_EJB, "EntryBean", Entry.class.getName(), isEntryStateful()),
@@ -409,6 +434,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
             return bean.doubleWhoAmI(new CallAnotherBeanInfo.Builder()
                     .username(username)
                     .password(password)
+                    .authzName(authzName)
                     .type(type)
                     .providerUrl(server2Url)
                     .statefullWhoAmI(isWhoAmIStateful())
@@ -454,9 +480,14 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     }
 
     protected URL getEntryServletUrl(String warName, String username, String password, ReAuthnType type) throws IOException {
+        return getEntryServletUrl(warName, username, password, null, type);
+    }
+
+    protected URL getEntryServletUrl(String warName, String username, String password, String authzName, ReAuthnType type) throws IOException {
         final StringBuilder sb = new StringBuilder(server1.getApplicationHttpUrl() + "/" + warName + EntryServlet.SERVLET_PATH);
         addQueryParam(sb, EntryServlet.PARAM_USERNAME, username);
         addQueryParam(sb, EntryServlet.PARAM_PASSWORD, password);
+        addQueryParam(sb, EntryServlet.PARAM_AUTHZ_NAME, authzName);
         addQueryParam(sb, EntryServlet.PARAM_STATEFULL, String.valueOf(isWhoAmIStateful()));
         addQueryParam(sb, EntryServlet.PARAM_CREATE_SESSION, String.valueOf(true));
         addQueryParam(sb, EntryServlet.PARAM_REAUTHN_TYPE, type.name());
@@ -676,6 +707,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
             users.add("whoami");
             users.add("server");
             users.add("server-norunas");
+            users.add("authz");
             users.addAll(additionalUsers);
             String[] usersArr = new String[users.size()];
             usersArr = users.toArray(usersArr);

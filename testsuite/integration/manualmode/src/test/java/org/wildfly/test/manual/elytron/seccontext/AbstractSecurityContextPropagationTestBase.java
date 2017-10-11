@@ -50,7 +50,9 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -489,6 +491,9 @@ public abstract class AbstractSecurityContextPropagationTestBase {
         private volatile ModelControllerClient client;
         private volatile CommandContext commandCtx;
         private volatile ByteArrayOutputStream consoleOut = new ByteArrayOutputStream();
+        private final List<String> deployments = new ArrayList<>();
+        private String jbossServerConfigDir;
+        private Path propertyFile;
 
         private volatile String snapshot;
 
@@ -506,9 +511,11 @@ public abstract class AbstractSecurityContextPropagationTestBase {
                 commandCtx = CLITestUtil.getCommandContext(host, getManagementPort(), null, consoleOut, -1);
                 commandCtx.connectController();
                 readSnapshot();
+                jbossServerConfigDir = readJbossServerConfigDir();
 
                 if (snapshot == null) {
                     // configure each server just once
+                    takeSnapshot();
                     createPropertyFile(config.getAdditionalUsers());
                     final File cliFIle = File.createTempFile("seccontext-", ".cli");
                     try (FileOutputStream fos = new FileOutputStream(cliFIle)) {
@@ -522,11 +529,10 @@ public abstract class AbstractSecurityContextPropagationTestBase {
                     cliFIle.delete();
                     reload();
 
+                    deployments.addAll(config.getDeployments());
                     for (String deployment : config.getDeployments()) {
                         deployer.deploy(deployment);
                     }
-
-                    takeSnapshot();
                 }
             }
         }
@@ -534,9 +540,14 @@ public abstract class AbstractSecurityContextPropagationTestBase {
         public void shutDown() throws IOException {
             if (containerController.isStarted(name)) {
                 // deployer.undeploy(name);
+                for (String deployment : deployments) {
+                    deployer.undeploy(deployment);
+                }
                 commandCtx.terminateSession();
                 client.close();
                 containerController.stop(name);
+                reloadFromSnapshot();
+                Files.delete(propertyFile);
             }
         }
 
@@ -635,6 +646,17 @@ public abstract class AbstractSecurityContextPropagationTestBase {
             }
         }
 
+        private void reloadFromSnapshot() throws IOException {
+            if (snapshot != null) {
+                File snapshotFile = new File(jbossServerConfigDir + File.separator + "standalone_xml_history" + File.separator
+                        + "snapshot" + File.separator + snapshot);
+                String standaloneName = snapshot.replaceAll("\\d", "").replaceFirst("-", "");
+                File standaloneFile = new File(jbossServerConfigDir + File.separator + standaloneName);
+                Files.copy(snapshotFile.toPath(), standaloneFile.toPath(), REPLACE_EXISTING);
+                snapshotFile.delete();
+            }
+        }
+
         private void reload() {
             ModelNode operation = Util.createOperation("reload", null);
             ServerReload.executeReloadAndWaitForCompletion(client, operation, (int) SECONDS.toMillis(90), host,
@@ -646,10 +668,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
          * property-realm configuration (see {@code seccontext-setup.cli} script)
          */
         private void createPropertyFile(List<String> additionalUsers) throws IOException {
-            sendLine("/core-service=platform-mbean/type=runtime:read-attribute(name=system-properties)", false);
-            assertTrue(consoleOut.size() > 0);
-            ModelNode node = ModelNode.fromStream(new ByteArrayInputStream(consoleOut.toByteArray()));
-            String configDirPath = node.get(ModelDescriptionConstants.RESULT).get("jboss.server.config.dir").asString();
+            String configDirPath = jbossServerConfigDir != null ? jbossServerConfigDir : readJbossServerConfigDir();
             List<String> users = new ArrayList<>();
             users.add("admin");
             users.add("servlet");
@@ -660,8 +679,15 @@ public abstract class AbstractSecurityContextPropagationTestBase {
             users.addAll(additionalUsers);
             String[] usersArr = new String[users.size()];
             usersArr = users.toArray(usersArr);
-            Files.write(Paths.get(configDirPath, "seccontext.properties"),
-                    Utils.createUsersFromRoles(usersArr).getBytes(StandardCharsets.ISO_8859_1));
+            propertyFile = Paths.get(configDirPath, "seccontext.properties");
+            Files.write(propertyFile, Utils.createUsersFromRoles(usersArr).getBytes(StandardCharsets.ISO_8859_1));
+        }
+
+        private String readJbossServerConfigDir() throws IOException {
+            sendLine("/core-service=platform-mbean/type=runtime:read-attribute(name=system-properties)", false);
+            assertTrue(consoleOut.size() > 0);
+            ModelNode node = ModelNode.fromStream(new ByteArrayInputStream(consoleOut.toByteArray()));
+            return node.get(ModelDescriptionConstants.RESULT).get("jboss.server.config.dir").asString();
         }
 
         private void addCliCommands(File file, List<String> commands) throws IOException {

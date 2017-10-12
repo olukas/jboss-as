@@ -21,20 +21,25 @@
  */
 package org.wildfly.test.manual.elytron.seccontext;
 
-import java.net.URL;
-import java.util.concurrent.Callable;
-import javax.ejb.EJBAccessException;
 import static javax.servlet.http.HttpServletResponse.SC_FORBIDDEN;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.jboss.as.test.integration.security.common.Utils;
 import static org.jboss.as.test.integration.security.common.Utils.REDIRECT_STRATEGY;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
+import static org.wildfly.test.manual.elytron.seccontext.AbstractSecurityContextPropagationTestBase.isEjbAccessException;
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_BASIC;
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_BEARER_TOKEN;
+import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_FORM;
+
+import java.net.URL;
+import java.util.concurrent.Callable;
+import javax.ejb.EJBAccessException;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.jboss.as.test.integration.security.common.Utils;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.wildfly.security.auth.client.AuthenticationConfiguration;
@@ -42,10 +47,6 @@ import org.wildfly.security.auth.client.AuthenticationContext;
 import org.wildfly.security.auth.client.MatchRule;
 import org.wildfly.security.credential.BearerTokenCredential;
 import org.wildfly.security.sasl.SaslMechanismSelector;
-import static org.wildfly.test.manual.elytron.seccontext.AbstractSecurityContextPropagationTestBase.isEjbAccessException;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_BASIC;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_BEARER_TOKEN;
-import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_ENTRY_SERVLET_FORM;
 
 /**
  *
@@ -314,6 +315,48 @@ public abstract class AbstractAuthenticationForwardingTestCase extends AbstractS
             assertEquals("Unexpected result from WhoAmIServlet", "servlet",
                     doHttpRequestTokenAuthn(httpClient, whoAmIServletUrl, jwtToken, SC_OK));
         }
+    }
+
+
+    /**
+     * Test propagation of RuntimeException back to server1 during a call using the authentication forwarding.
+     *
+     * <pre>
+     * When: EJB client calls EntryBean as admin user and Elytron AuthenticationContext API is used to
+     *       authorization forwarding to WhoAmIBean call with "server" user used as caller server identity
+     * Then: WhoAmIBean.throwIllegalStateException call should result in expected IllegalStateException.
+     * </pre>
+     */
+    @Test
+    public void testIllegalStateExceptionFromForwardedAuthn() throws Exception {
+        String[] doubleWhoAmI = AuthenticationContext.empty()
+                .with(MatchRule.ALL,
+                        AuthenticationConfiguration.empty().setSaslMechanismSelector(SaslMechanismSelector.ALL)
+                        .useBearerTokenCredential(new BearerTokenCredential(createJwtToken("admin"))))
+                .runCallable(getWhoAmIAndIllegalStateExceptionCallable(ReAuthnType.FORWARDED_AUTHENTICATION, null, null));
+        assertNotNull("The entryBean.whoAmIAndIllegalStateException() should return not-null instance", doubleWhoAmI);
+        assertEquals("admin", doubleWhoAmI[0]);
+        assertThat(doubleWhoAmI[1], isExpectedIllegalStateException());
+    }
+
+    /**
+     * Test propagation of Server2Exception (unknown on server1) back to server1 during a call using the authentication
+     * forwarding.
+     *
+     * <pre>
+     * When: EJB client calls EntryBean as admin user and Elytron AuthenticationContext API is used to
+     *       authorization forwarding to WhoAmIBean call with "server" user used as caller server identity
+     * Then: WhoAmIBean.throwServer2Exception call should result in expected ClassNotFoundException.
+     * </pre>
+     */
+    @Test
+    public void testServer2ExceptionFromForwardedAuthn() throws Exception {
+        String[] doubleWhoAmI = SeccontextUtil.switchIdentity("admin", "admin",
+                getWhoAmIAndServer2ExceptionCallable(ReAuthnType.FORWARDED_AUTHORIZATION, "server", "server"),
+                ReAuthnType.AC_AUTHENTICATION);
+        assertNotNull("The entryBean.whoAmIAndServer2Exception() should return not-null instance", doubleWhoAmI);
+        assertEquals("admin", doubleWhoAmI[0]);
+        assertThat(doubleWhoAmI[1], isClassNotFoundException_Server2Exception());
     }
 
     /**

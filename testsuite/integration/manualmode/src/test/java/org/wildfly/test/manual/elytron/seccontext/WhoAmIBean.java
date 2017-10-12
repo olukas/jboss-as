@@ -16,7 +16,6 @@
 package org.wildfly.test.manual.elytron.seccontext;
 
 import java.security.Principal;
-
 import javax.annotation.Resource;
 import javax.annotation.security.DeclareRoles;
 import javax.annotation.security.RolesAllowed;
@@ -35,8 +34,19 @@ public class WhoAmIBean implements WhoAmI {
     @Resource
     private SessionContext context;
 
+    @Override
     public Principal getCallerPrincipal() {
         return context.getCallerPrincipal();
+    }
+
+    @Override
+    public String throwIllegalStateException() {
+        throw new IllegalStateException("Expected IllegalStateException from WhoAmIBean.");
+    }
+
+    @Override
+    public String throwServer2Exception() {
+        throw new Server2Exception("Expected Server2Exception from WhoAmIBean.");
     }
 
 }

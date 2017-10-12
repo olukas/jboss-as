@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Red Hat, Inc.
+ * Copyright 2017 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,24 +15,18 @@
  */
 package org.wildfly.test.manual.elytron.seccontext;
 
-import java.security.Principal;
-import javax.ejb.Remote;
+/**
+ * Custom exception that should be available just in deployments on server2.
+ *
+ * @author Ondrej Kotek
+ */
+public class Server2Exception extends RuntimeException {
 
-@Remote
-public interface WhoAmI {
+    public Server2Exception() {
+        super();
+    }
 
-    /**
-     * @return the caller principal obtained from the EJBContext.
-     */
-    Principal getCallerPrincipal();
-
-    /**
-     * Throws IllegalStateException.
-     */
-    String throwIllegalStateException();
-
-    /**
-     * Throws Server2Exception.
-     */
-    String throwServer2Exception();
+    public Server2Exception(String s) {
+        super(s);
+    }
 }

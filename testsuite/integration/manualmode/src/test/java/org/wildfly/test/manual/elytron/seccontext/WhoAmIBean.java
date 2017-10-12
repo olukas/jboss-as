@@ -28,7 +28,7 @@ import javax.ejb.Stateless;
  * @author Josef Cacek
  */
 @Stateless
-@RolesAllowed({ "whoami", "admin", "no-server2-identity", "entry", "authz" })
+@RolesAllowed({ "whoami", "admin", "no-server2-identity", "authz" })
 @DeclareRoles({ "entry", "whoami", "servlet", "admin", "no-server2-identity", "authz" })
 public class WhoAmIBean implements WhoAmI {
 

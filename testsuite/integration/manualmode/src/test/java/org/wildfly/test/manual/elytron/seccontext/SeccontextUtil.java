@@ -86,6 +86,17 @@ public class SeccontextUtil {
         return switchIdentity(username, password, null, callable, type);
     }
 
+    /**
+     * Method which handles {@link ReAuthnType} types by using Elytron API. Based on provided type new
+     * {@link AuthenticationContext} is created and given callable is called within the context.
+     *
+     * @param username login name used for reauthentication scenarios (or null)
+     * @param password password used for reauthentication scenarios (or null)
+     * @param authzName used for authorization name
+     * @param callable logic to be executed in the requested AuthenticationContext
+     * @param type reauthentication type
+     * @return result of the callable call
+     */
     public static <T> T switchIdentity(final String username, final String password, final String authzName,
         final Callable<T> callable, ReAuthnType type) throws Exception {
 

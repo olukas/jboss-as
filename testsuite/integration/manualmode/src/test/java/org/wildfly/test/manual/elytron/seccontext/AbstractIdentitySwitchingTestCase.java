@@ -113,9 +113,9 @@ public abstract class AbstractIdentitySwitchingTestCase extends AbstractSecurity
     @Test
     public void testAuthzCtxAuthzPasses() throws Exception {
         String[] doubleWhoAmI = SeccontextUtil.switchIdentity("entry", "entry", "authz",
-            getDoubleWhoAmICallable(ReAuthnType.AC_AUTHORIZATION, "server", "server", "entry"), ReAuthnType.AC_AUTHORIZATION);
+            getDoubleWhoAmICallable(ReAuthnType.AC_AUTHORIZATION, "server", "server", "whoami"), ReAuthnType.AC_AUTHORIZATION);
         assertNotNull("The entryBean.doubleWhoAmI() should return not-null instance", doubleWhoAmI);
-        assertArrayEquals("Unexpected principal names returned from doubleWhoAmI", new String[] { "authz", "entry" },
+        assertArrayEquals("Unexpected principal names returned from doubleWhoAmI", new String[] { "authz", "whoami" },
             doubleWhoAmI);
     }
 
@@ -188,6 +188,25 @@ public abstract class AbstractIdentitySwitchingTestCase extends AbstractSecurity
     public void testAuthzCtxWrongPasswdFail() throws Exception {
         String[] doubleWhoAmI = SeccontextUtil.switchIdentity("entry", "entry", "authz",
                 getDoubleWhoAmICallable(ReAuthnType.AC_AUTHORIZATION, "whoami", "wrongpass"), ReAuthnType.AC_AUTHORIZATION);
+        assertNotNull("The entryBean.doubleWhoAmI() should return not-null instance", doubleWhoAmI);
+        assertEquals("The result of doubleWhoAmI() has wrong lenght", 2, doubleWhoAmI.length);
+        assertEquals("authz", doubleWhoAmI[0]);
+        assertThat(doubleWhoAmI[1], isEjbAuthenticationError());
+    }
+
+    /**
+     * Test EJB call fails when invalidauthorization name is used for reauthorization.
+     *
+     * <pre>
+     * When: EJB client calls (with valid credentials and authrozation name) EntryBean and Elytron AuthenticationContext API is used to
+     *       reauthorizate (with invalid authorization name) and call the WhoAmIBean
+     * Then: WhoAmIBean call fails
+     * </pre>
+     */
+    @Test
+    public void testAuthzCtxWrongAuthzNameFail() throws Exception {
+        String[] doubleWhoAmI = SeccontextUtil.switchIdentity("entry", "entry", "authz",
+                getDoubleWhoAmICallable(ReAuthnType.AC_AUTHORIZATION, "whoami", "whoami", "doesntexist"), ReAuthnType.AC_AUTHORIZATION);
         assertNotNull("The entryBean.doubleWhoAmI() should return not-null instance", doubleWhoAmI);
         assertEquals("The result of doubleWhoAmI() has wrong lenght", 2, doubleWhoAmI.length);
         assertEquals("authz", doubleWhoAmI[0]);

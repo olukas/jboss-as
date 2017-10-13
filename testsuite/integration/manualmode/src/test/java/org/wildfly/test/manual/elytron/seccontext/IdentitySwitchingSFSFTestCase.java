@@ -22,6 +22,7 @@
 package org.wildfly.test.manual.elytron.seccontext;
 
 /**
+ * Identity switching for security context propagation test. Variant which uses both Entry and WhoAmI beans stateful.
  *
  * @author Josef Cacek
  */

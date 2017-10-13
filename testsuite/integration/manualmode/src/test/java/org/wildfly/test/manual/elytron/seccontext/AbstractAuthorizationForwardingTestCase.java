@@ -30,6 +30,7 @@ import org.junit.Test;
 import org.wildfly.security.auth.permission.RunAsPrincipalPermission;
 
 /**
+ * Authorization forwarding (credential less forwarding) for security context propagation test.
  *
  * @author Josef Cacek
  */

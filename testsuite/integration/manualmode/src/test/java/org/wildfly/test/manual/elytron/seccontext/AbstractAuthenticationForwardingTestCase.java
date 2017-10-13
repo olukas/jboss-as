@@ -49,6 +49,7 @@ import org.wildfly.security.credential.BearerTokenCredential;
 import org.wildfly.security.sasl.SaslMechanismSelector;
 
 /**
+ * Authentication forwarding (credential forwarding) for security context propagation test.
  *
  * @author Josef Cacek
  */

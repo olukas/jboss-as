@@ -24,6 +24,7 @@ package org.wildfly.test.manual.elytron.seccontext;
 import java.io.Serializable;
 
 /**
+ * Class which hold information about calling another {@link Entry} bean or {@link WhoAmI} bean.
  *
  * @author olukas
  */

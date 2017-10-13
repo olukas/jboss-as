@@ -22,6 +22,8 @@
 package org.wildfly.test.manual.elytron.seccontext;
 
 /**
+ * Authentication forwarding (credential forwarding) for security context propagation test. Variant which uses both Entry and
+ * WhoAmI beans stateful.
  *
  * @author Josef Cacek
  */

@@ -30,6 +30,8 @@ import org.junit.Test;
 import static org.wildfly.test.manual.elytron.seccontext.SeccontextUtil.WAR_WHOAMI;
 
 /**
+ * Test that {@link InitialContext} properties (principal+credentials) takes priority over the Elytron authentication
+ * configuration.
  *
  * @author Josef Cacek
  */

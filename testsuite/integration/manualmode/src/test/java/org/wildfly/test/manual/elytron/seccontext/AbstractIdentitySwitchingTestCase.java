@@ -48,6 +48,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 /**
+ * Identity switching for security context propagation test.
  *
  * @author Hynek Švábek <hsvabek@redhat.com>
  */

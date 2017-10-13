@@ -124,7 +124,7 @@ public class ServerChainSecurityContextPropagationTestCase extends AbstractSecur
     @TargetsContainer(SERVER3)
     public static Archive<?> createServerChain3Deployment() {
         return ShrinkWrap.create(JavaArchive.class, WAR_WHOAMI_SERVER_CHAIN + ".jar")
-                .addClasses(WhoAmIBean.class, WhoAmI.class)
+                .addClasses(WhoAmIBean.class, WhoAmI.class, Server2Exception.class)
                 .addAsManifestResource(Utils.getJBossEjb3XmlAsset("seccontext-whoami"), "jboss-ejb3.xml");
     }
 

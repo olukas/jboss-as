@@ -22,9 +22,12 @@
 package org.wildfly.test.manual.elytron.seccontext;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
+
 import org.junit.Test;
+import org.wildfly.security.auth.permission.RunAsPrincipalPermission;
 
 /**
  *
@@ -97,4 +100,42 @@ public abstract class AbstractAuthorizationForwardingTestCase extends AbstractSe
         assertThat(doubleWhoAmI[1], isEjbAuthenticationError());
     }
 
+    /**
+     * Test propagation of RuntimeException back to server1 during a call using the authorization forwarding.
+     *
+     * <pre>
+     * When: EJB client calls EntryBean as admin user and Elytron AuthenticationContext API is used to
+     *       authorization forwarding to WhoAmIBean call with "server" user used as caller server identity
+     * Then: WhoAmIBean.throwIllegalStateException call should result in expected IllegalStateException.
+     * </pre>
+     */
+    @Test
+    public void testIllegalStateExceptionFromForwardedAuthz() throws Exception {
+        String[] doubleWhoAmI = SeccontextUtil.switchIdentity("admin", "admin",
+                getWhoAmIAndIllegalStateExceptionCallable(ReAuthnType.FORWARDED_AUTHORIZATION, "server", "server"),
+                ReAuthnType.AC_AUTHENTICATION);
+        assertNotNull("The entryBean.whoAmIAndIllegalStateException() should return not-null instance", doubleWhoAmI);
+        assertEquals("admin", doubleWhoAmI[0]);
+        assertThat(doubleWhoAmI[1], isExpectedIllegalStateException());
+    }
+
+    /**
+     * Test propagation of Server2Exception (unknown on server1) back to server1 during a call using the authorization
+     * forwarding.
+     *
+     * <pre>
+     * When: EJB client calls EntryBean as admin user and Elytron AuthenticationContext API is used to
+     *       authorization forwarding to WhoAmIBean call with "server" user used as caller server identity
+     * Then: WhoAmIBean.throwServer2Exception call should result in expected ClassNotFoundException.
+     * </pre>
+     */
+    @Test
+    public void testServer2ExceptionFromForwardedAuthz() throws Exception {
+        String[] doubleWhoAmI = SeccontextUtil.switchIdentity("admin", "admin",
+                getWhoAmIAndServer2ExceptionCallable(ReAuthnType.FORWARDED_AUTHORIZATION, "server", "server"),
+                ReAuthnType.AC_AUTHENTICATION);
+        assertNotNull("The entryBean.whoAmIAndServer2Exception() should return not-null instance", doubleWhoAmI);
+        assertEquals("admin", doubleWhoAmI[0]);
+        assertThat(doubleWhoAmI[1], isClassNotFoundException_Server2Exception());
+    }
 }

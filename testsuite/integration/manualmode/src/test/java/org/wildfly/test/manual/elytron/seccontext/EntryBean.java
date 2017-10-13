@@ -26,7 +26,6 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Callable;
-
 import javax.annotation.Resource;
 import javax.annotation.security.DeclareRoles;
 import javax.annotation.security.RolesAllowed;
@@ -57,27 +56,30 @@ public class EntryBean implements Entry {
 
     @Override
     public String[] doubleWhoAmI(CallAnotherBeanInfo info) {
-        String[] result = new String[2];
-        result[0] = context.getCallerPrincipal().getName();
-
         final Callable<String> callable = () -> {
             return getWhoAmIBean(info.getLookupEjbAppName(), info.getProviderUrl(),
                     info.isStatefullWhoAmI()).getCallerPrincipal().getName();
         };
-        try {
-            result[1] = switchIdentity(info.getUsername(), info.getPassword(), info.getAuthzName(), callable, info.getType());
-        } catch (Exception e) {
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            result[1] = sw.toString();
-        } finally {
-            String secondLocalWho = context.getCallerPrincipal().getName();
-            if (!secondLocalWho.equals(result[0])) {
-                throw new IllegalStateException(
-                        "Local getCallerPrincipal changed from '" + result[0] + "' to '" + secondLocalWho);
-            }
-        }
-        return result;
+
+        return whoAmIAndCall(info, callable);
+    }
+
+    public String[] whoAmIAndIllegalStateException(CallAnotherBeanInfo info) {
+        final Callable<String> callable = () -> {
+            return getWhoAmIBean(info.getLookupEjbAppName(), info.getProviderUrl(),
+                    info.isStatefullWhoAmI()).throwIllegalStateException();
+        };
+
+        return whoAmIAndCall(info, callable);
+    }
+
+    public String[] whoAmIAndServer2Exception(CallAnotherBeanInfo info) {
+        final Callable<String> callable = () -> {
+            return getWhoAmIBean(info.getLookupEjbAppName(), info.getProviderUrl(),
+                    info.isStatefullWhoAmI()).throwServer2Exception();
+        };
+
+        return whoAmIAndCall(info, callable);
     }
 
     @Override
@@ -102,6 +104,26 @@ public class EntryBean implements Entry {
             if (!secondLocalWho.equals(firstWho)) {
                 throw new IllegalStateException(
                         "Local getCallerPrincipal changed from '" + firstWho + "' to '" + secondLocalWho);
+            }
+        }
+        return result;
+    }
+
+    private String[] whoAmIAndCall(CallAnotherBeanInfo info, Callable<String> callable) {
+        String[] result = new String[2];
+        result[0] = context.getCallerPrincipal().getName();
+
+        try {
+            result[1] = switchIdentity(info.getUsername(), info.getPassword(), info.getAuthzName(), callable, info.getType());
+        } catch (Exception e) {
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            result[1] = sw.toString();
+        } finally {
+            String secondLocalWho = context.getCallerPrincipal().getName();
+            if (!secondLocalWho.equals(result[0])) {
+                throw new IllegalStateException(
+                        "Local getCallerPrincipal changed from '" + result[0] + "' to '" + secondLocalWho);
             }
         }
         return result;

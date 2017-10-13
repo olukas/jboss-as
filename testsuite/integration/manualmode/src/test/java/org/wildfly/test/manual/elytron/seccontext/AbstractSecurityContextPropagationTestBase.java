@@ -15,9 +15,11 @@
  */
 package org.wildfly.test.manual.elytron.seccontext;
 
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
 import static javax.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
+import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
@@ -52,7 +54,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -226,7 +227,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     @TargetsContainer(SERVER2)
     public static Archive<?> createEjbClientDeployment() {
         return ShrinkWrap.create(WebArchive.class, WAR_WHOAMI + ".war")
-                .addClasses(WhoAmIBean.class, WhoAmIBeanSFSB.class, WhoAmI.class, WhoAmIServlet.class)
+                .addClasses(WhoAmIBean.class, WhoAmIBeanSFSB.class, WhoAmI.class, WhoAmIServlet.class, Server2Exception.class)
                 .addAsWebInfResource(Utils.getJBossWebXmlAsset("seccontext-web"), "jboss-web.xml")
                 .addAsWebInfResource(new StringAsset(SecurityTestConstants.WEB_XML_BASIC_AUTHN), "web.xml")
                 .addAsWebInfResource(Utils.getJBossEjb3XmlAsset("seccontext-whoami"), "jboss-ejb3.xml");
@@ -290,6 +291,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
      */
     protected String doHttpRequest(final CloseableHttpClient httpClient, final URL url, int expectedStatus)
             throws URISyntaxException, IOException, ClientProtocolException, UnsupportedEncodingException {
+
         return doHttpRequestFormAuthn(httpClient, url, false, null, null, expectedStatus);
     }
 
@@ -308,6 +310,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     protected String doHttpRequestFormAuthn(final CloseableHttpClient httpClient, final URL url, boolean loginFormExpected,
             String username, String password, int expectedStatus)
             throws URISyntaxException, IOException, ClientProtocolException, UnsupportedEncodingException {
+
         HttpGet httpGet = new HttpGet(url.toURI());
 
         HttpResponse response = httpClient.execute(httpGet);
@@ -354,6 +357,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     protected String doHttpRequestTokenAuthn(final CloseableHttpClient httpClient, final URL url, String token,
             int expectedStatusCode)
             throws URISyntaxException, IOException, ClientProtocolException, UnsupportedEncodingException {
+
         final HttpGet httpGet = new HttpGet(url.toURI());
 
         HttpResponse response = httpClient.execute(httpGet);
@@ -416,7 +420,7 @@ public abstract class AbstractSecurityContextPropagationTestBase {
     }
 
     /**
-     * Creates a callable for executing {@link Entry#doubleWhoAmI(String, String, ReAuthnType, String)} as given user.
+     * Creates a callable for executing {@link Entry#doubleWhoAmI(CallAnotherBeanInfo)} as given user.
      *
      * @param type reauthentication re-authentication type used within the doubleWhoAmI
      * @param username
@@ -425,7 +429,8 @@ public abstract class AbstractSecurityContextPropagationTestBase {
      * @return
      */
     protected Callable<String[]> getDoubleWhoAmICallable(final ReAuthnType type, final String username, final String password,
-        final String authzName) {
+            final String authzName) {
+
         return () -> {
             final Entry bean = SeccontextUtil.lookup(
                     SeccontextUtil.getRemoteEjbName(JAR_ENTRY_EJB, "EntryBean", Entry.class.getName(), isEntryStateful()),
@@ -435,6 +440,58 @@ public abstract class AbstractSecurityContextPropagationTestBase {
                     .username(username)
                     .password(password)
                     .authzName(authzName)
+                    .type(type)
+                    .providerUrl(server2Url)
+                    .statefullWhoAmI(isWhoAmIStateful())
+                    .build());
+        };
+    }
+
+    /**
+     * Creates a callable for executing {@link Entry#whoAmIAndIllegalStateException(CallAnotherBeanInfo)} as given user.
+     *
+     * @param type reauthentication re-authentication type used within the doubleWhoAmI
+     * @param username
+     * @param password
+     * @return
+     */
+    protected Callable<String[]> getWhoAmIAndIllegalStateExceptionCallable(final ReAuthnType type, final String username,
+            final String password) {
+
+        return () -> {
+            final Entry bean = SeccontextUtil.lookup(
+                    SeccontextUtil.getRemoteEjbName(JAR_ENTRY_EJB, "EntryBean", Entry.class.getName(), isEntryStateful()),
+                    server1.getApplicationRemotingUrl());
+            final String server2Url = server2.getApplicationRemotingUrl();
+            return bean.whoAmIAndIllegalStateException(new CallAnotherBeanInfo.Builder()
+                    .username(username)
+                    .password(password)
+                    .type(type)
+                    .providerUrl(server2Url)
+                    .statefullWhoAmI(isWhoAmIStateful())
+                    .build());
+        };
+    }
+
+    /**
+     * Creates a callable for executing {@link Entry#whoAmIAndServer2Exception(CallAnotherBeanInfo)} as given user.
+     *
+     * @param type reauthentication re-authentication type used within the doubleWhoAmI
+     * @param username
+     * @param password
+     * @return
+     */
+    protected Callable<String[]> getWhoAmIAndServer2ExceptionCallable(final ReAuthnType type, final String username,
+            final String password) {
+
+        return () -> {
+            final Entry bean = SeccontextUtil.lookup(
+                    SeccontextUtil.getRemoteEjbName(JAR_ENTRY_EJB, "EntryBean", Entry.class.getName(), isEntryStateful()),
+                    server1.getApplicationRemotingUrl());
+            final String server2Url = server2.getApplicationRemotingUrl();
+            return bean.whoAmIAndServer2Exception(new CallAnotherBeanInfo.Builder()
+                    .username(username)
+                    .password(password)
                     .type(type)
                     .providerUrl(server2Url)
                     .statefullWhoAmI(isWhoAmIStateful())
@@ -458,6 +515,15 @@ public abstract class AbstractSecurityContextPropagationTestBase {
         return anyOf(startsWith("javax.ejb.NoSuchEJBException: EJBCLIENT000079"),
                 startsWith("javax.naming.CommunicationException: EJBCLIENT000062"), containsString("JBREM000308"),
                 containsString("javax.security.sasl.SaslException: Authentication failed"));
+    }
+
+    protected static org.hamcrest.Matcher<java.lang.String> isExpectedIllegalStateException() {
+        return containsString("EJBException: java.lang.IllegalStateException: Expected IllegalStateException");
+    }
+
+    protected static org.hamcrest.Matcher<java.lang.String> isClassNotFoundException_Server2Exception() {
+        return allOf(startsWith("javax.ejb.EJBException"),
+                containsString("ClassNotFoundException: org.wildfly.test.manual.elytron.seccontext.Server2Exception"));
     }
 
     protected static org.hamcrest.Matcher<java.lang.String> isEvidenceVerificationError() {

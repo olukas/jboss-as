@@ -324,7 +324,7 @@ public abstract class AbstractAuthenticationForwardingTestCase extends AbstractS
      *
      * <pre>
      * When: EJB client calls EntryBean as admin user and Elytron AuthenticationContext API is used to
-     *       authorization forwarding to WhoAmIBean call with "server" user used as caller server identity
+     *       authentication forwarding to WhoAmIBean call with "server" user used as caller server identity
      * Then: WhoAmIBean.throwIllegalStateException call should result in expected IllegalStateException.
      * </pre>
      */
@@ -346,15 +346,17 @@ public abstract class AbstractAuthenticationForwardingTestCase extends AbstractS
      *
      * <pre>
      * When: EJB client calls EntryBean as admin user and Elytron AuthenticationContext API is used to
-     *       authorization forwarding to WhoAmIBean call with "server" user used as caller server identity
+     *       authentication forwarding to WhoAmIBean call with "server" user used as caller server identity
      * Then: WhoAmIBean.throwServer2Exception call should result in expected ClassNotFoundException.
      * </pre>
      */
     @Test
     public void testServer2ExceptionFromForwardedAuthn() throws Exception {
-        String[] doubleWhoAmI = SeccontextUtil.switchIdentity("admin", "admin",
-                getWhoAmIAndServer2ExceptionCallable(ReAuthnType.FORWARDED_AUTHORIZATION, "server", "server"),
-                ReAuthnType.AC_AUTHENTICATION);
+        String[] doubleWhoAmI = AuthenticationContext.empty()
+                .with(MatchRule.ALL,
+                        AuthenticationConfiguration.empty().setSaslMechanismSelector(SaslMechanismSelector.ALL)
+                        .useBearerTokenCredential(new BearerTokenCredential(createJwtToken("admin"))))
+                .runCallable(getWhoAmIAndServer2ExceptionCallable(ReAuthnType.FORWARDED_AUTHENTICATION, null, null));
         assertNotNull("The entryBean.whoAmIAndServer2Exception() should return not-null instance", doubleWhoAmI);
         assertEquals("admin", doubleWhoAmI[0]);
         assertThat(doubleWhoAmI[1], isClassNotFoundException_Server2Exception());

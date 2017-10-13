@@ -27,7 +27,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 
 import org.junit.Test;
-import org.wildfly.security.auth.permission.RunAsPrincipalPermission;
 
 /**
  * Authorization forwarding (credential less forwarding) for security context propagation test.
